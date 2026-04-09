@@ -320,13 +320,14 @@ p {
 
 .message {
   max-width: 900px;
-  padding: 18px 20px;
+  padding: 18px 0;
   border-radius: 26px;
   border: 1px solid var(--line);
   position: relative;
 }
 
 .message.user {
+  padding: 18px 20px;
   align-self: flex-end;
   background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
 }
@@ -453,6 +454,23 @@ p {
   gap: 12px;
 }
 
+.assistant-message-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-stack-scroll.collapsed {
+  max-height: calc(15rem * 3 + 24px);
+  overflow: auto;
+  padding: 0 20px 0 20px;
+  scrollbar-gutter: stable;
+}
+
+.assistant-stack-scroll.expanded {
+  max-height: none;
+  overflow: visible;
+}
+
 .assistant-block,
 .assistant-section-card {
   display: grid;
@@ -487,7 +505,7 @@ p {
 
 .assistant-scroll-body.collapsed,
 .assistant-section-body.collapsed {
-  max-height: 30rem;
+  max-height: 15rem;
   overflow: auto;
   padding-right: 8px;
   scrollbar-gutter: stable;
@@ -779,6 +797,7 @@ p {
 .thread-list::-webkit-scrollbar,
 .message-stream::-webkit-scrollbar,
 .markdown-body pre::-webkit-scrollbar,
+.assistant-stack-scroll::-webkit-scrollbar,
 .assistant-scroll-body::-webkit-scrollbar,
 .assistant-section-body::-webkit-scrollbar {
   width: 12px;
@@ -788,6 +807,7 @@ p {
 .thread-list::-webkit-scrollbar-thumb,
 .message-stream::-webkit-scrollbar-thumb,
 .markdown-body pre::-webkit-scrollbar-thumb,
+.assistant-stack-scroll::-webkit-scrollbar-thumb,
 .assistant-scroll-body::-webkit-scrollbar-thumb,
 .assistant-section-body::-webkit-scrollbar-thumb {
   background: rgba(122, 101, 87, 0.45);
@@ -799,6 +819,7 @@ p {
 .thread-list::-webkit-scrollbar-track,
 .message-stream::-webkit-scrollbar-track,
 .markdown-body pre::-webkit-scrollbar-track,
+.assistant-stack-scroll::-webkit-scrollbar-track,
 .assistant-scroll-body::-webkit-scrollbar-track,
 .assistant-section-body::-webkit-scrollbar-track {
   background: transparent;

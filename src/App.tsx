@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import {
@@ -987,7 +987,7 @@ function renderAssistantBody(input: {
   const { message, pending, expandedMessages, expandedSections, onToggleMessage, onToggleSection } = input;
 
   if (message.id === pendingMessageId && pending?.mode === "staged") {
-    return (
+    const stack = (
       <div className="assistant-stack">
         {pending.intro.trim() ? (
           <ScrollableBlock
@@ -1016,11 +1016,20 @@ function renderAssistantBody(input: {
         ) : null}
       </div>
     );
+
+    return (
+      <MessageStackBlock
+        expanded={Boolean(expandedMessages[message.id])}
+        onToggle={() => onToggleMessage(message.id)}
+      >
+        {stack}
+      </MessageStackBlock>
+    );
   }
 
   const parsedSections = splitAssistantSections(message.content);
   if (parsedSections) {
-    return (
+    const stack = (
       <div className="assistant-stack">
         {parsedSections.intro.trim() ? (
           <ScrollableBlock
@@ -1057,6 +1066,15 @@ function renderAssistantBody(input: {
         ) : null}
       </div>
     );
+
+    return (
+      <MessageStackBlock
+        expanded={Boolean(expandedMessages[message.id])}
+        onToggle={() => onToggleMessage(message.id)}
+      >
+        {stack}
+      </MessageStackBlock>
+    );
   }
 
   const shouldClamp = isLongAssistantMessage(message.content);
@@ -1071,6 +1089,40 @@ function renderAssistantBody(input: {
       label={shouldClamp ? undefined : undefined}
       onToggle={shouldClamp ? () => onToggleMessage(message.id) : undefined}
     />
+  );
+}
+
+function MessageStackBlock(input: {
+  children: ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { children, expanded, onToggle } = input;
+
+  return (
+    <div className="assistant-message-stack">
+      <div className="assistant-block-controls">
+        <button
+          aria-label={expanded ? "Collapse message" : "Expand message"}
+          className="section-toggle-button assistant-block-toggle"
+          onClick={onToggle}
+          type="button"
+        >
+          {toggleSymbol(expanded)}
+        </button>
+      </div>
+      <div className={`assistant-stack-scroll ${expanded ? "expanded" : "collapsed"}`}>{children}</div>
+      <div className="assistant-block-controls">
+        <button
+          aria-label={expanded ? "Collapse message" : "Expand message"}
+          className="section-toggle-button assistant-block-toggle"
+          onClick={onToggle}
+          type="button"
+        >
+          {toggleSymbol(expanded)}
+        </button>
+      </div>
+    </div>
   );
 }
 
