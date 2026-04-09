@@ -36,9 +36,13 @@ export function App() {
   const abortRef = useRef<AbortController | null>(null);
   const messageStreamRef = useRef<HTMLElement | null>(null);
   const activeScrollThreadRef = useRef<string | null>(null);
+  const restoredScrollThreadRef = useRef<string | null>(null);
 
   useEffect(() => {
     void loadBootstrap();
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
   }, []);
 
   useEffect(() => {
@@ -52,22 +56,28 @@ export function App() {
   const selectedThread = selectedThreadId ? threadDetails[selectedThreadId] : null;
 
   useEffect(() => {
-    if (!selectedThreadId) {
+    restoredScrollThreadRef.current = null;
+  }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (!selectedThreadId || !selectedThread) {
       return;
     }
 
     const container = messageStreamRef.current;
-    if (!container) {
+    if (!container || restoredScrollThreadRef.current === selectedThreadId) {
       return;
     }
 
     const frame = window.requestAnimationFrame(() => {
-      container.scrollTop = readThreadScroll(selectedThreadId);
+      const savedScroll = readThreadScroll(selectedThreadId);
+      container.scrollTop = savedScroll;
       activeScrollThreadRef.current = selectedThreadId;
+      restoredScrollThreadRef.current = selectedThreadId;
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [selectedThreadId, selectedThread?.messages.length, pending?.runId]);
+  }, [selectedThreadId, selectedThread]);
 
   useEffect(() => {
     return () => {

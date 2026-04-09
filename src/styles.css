@@ -341,6 +341,47 @@ p {
   padding-left: 1.4rem;
 }
 
+.markdown-body table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0 0 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(38, 23, 14, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.92);
+}
+
+.markdown-body thead {
+  background: rgba(212, 106, 47, 0.08);
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 12px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(38, 23, 14, 0.08);
+}
+
+.markdown-body th + th,
+.markdown-body td + td {
+  border-left: 1px solid rgba(38, 23, 14, 0.08);
+}
+
+.markdown-body th {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.markdown-body tbody tr:nth-child(even) {
+  background: rgba(38, 23, 14, 0.025);
+}
+
+.markdown-body tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .markdown-body code {
   padding: 0.12rem 0.38rem;
   border-radius: 8px;
