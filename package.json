@@ -1,0 +1,33 @@
+{
+  "name": "fastchat",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm:dev:client\" \"npm:dev:server\"",
+    "dev:client": "vite",
+    "dev:server": "tsx watch server/index.ts",
+    "build": "vite build && tsc -p tsconfig.server.json",
+    "start": "node dist-server/index.js"
+  },
+  "dependencies": {
+    "@fastify/static": "^7.0.4",
+    "better-sqlite3": "^9.4.3",
+    "fastify": "^4.29.1",
+    "nanoid": "^5.1.7",
+    "p-limit": "^3.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vite": "^5.4.19"
+  }
+}
