@@ -19,6 +19,7 @@ const defaultSettings: Settings = {
 };
 
 const pendingMessageId = "__pending__";
+const scrollStorageKey = "fastchat.threadScroll";
 
 export function App() {
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -33,6 +34,8 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const messageStreamRef = useRef<HTMLElement | null>(null);
+  const activeScrollThreadRef = useRef<string | null>(null);
 
   useEffect(() => {
     void loadBootstrap();
@@ -47,6 +50,30 @@ export function App() {
   }, [selectedThreadId, threadDetails]);
 
   const selectedThread = selectedThreadId ? threadDetails[selectedThreadId] : null;
+
+  useEffect(() => {
+    if (!selectedThreadId) {
+      return;
+    }
+
+    const container = messageStreamRef.current;
+    if (!container) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollTop = readThreadScroll(selectedThreadId);
+      activeScrollThreadRef.current = selectedThreadId;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedThreadId, selectedThread?.messages.length, pending?.runId]);
+
+  useEffect(() => {
+    return () => {
+      persistCurrentScroll(activeScrollThreadRef.current, messageStreamRef.current);
+    };
+  }, []);
 
   const renderedMessages = useMemo(() => {
     if (!selectedThread) {
@@ -406,7 +433,10 @@ export function App() {
             <button
               key={thread.id}
               className={`thread-card ${thread.id === selectedThreadId ? "active" : ""}`}
-              onClick={() => setSelectedThreadId(thread.id)}
+              onClick={() => {
+                persistCurrentScroll(activeScrollThreadRef.current, messageStreamRef.current);
+                setSelectedThreadId(thread.id);
+              }}
             >
               <div className="thread-card-header">
                 <strong>{thread.title}</strong>
@@ -522,7 +552,18 @@ export function App() {
           </div>
         </header>
 
-        <section className="message-stream">
+        <section
+          className="message-stream"
+          ref={messageStreamRef}
+          onScroll={(event) => {
+            if (!selectedThreadId) {
+              return;
+            }
+
+            writeThreadScroll(selectedThreadId, event.currentTarget.scrollTop);
+            activeScrollThreadRef.current = selectedThreadId;
+          }}
+        >
           {renderedMessages.length === 0 ? (
             <div className="empty-state">
               <p className="eyebrow">Fast by design</p>
@@ -594,4 +635,37 @@ export function App() {
 
 function renderMarkdown(content: string) {
   return DOMPurify.sanitize(marked.parse(content, { breaks: true }) as string);
+}
+
+function readThreadScroll(threadId: string) {
+  try {
+    const raw = window.localStorage.getItem(scrollStorageKey);
+    if (!raw) {
+      return 0;
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    return typeof parsed[threadId] === "number" ? parsed[threadId] : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeThreadScroll(threadId: string, scrollTop: number) {
+  try {
+    const raw = window.localStorage.getItem(scrollStorageKey);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    parsed[threadId] = scrollTop;
+    window.localStorage.setItem(scrollStorageKey, JSON.stringify(parsed));
+  } catch {
+    // Ignore storage failures and keep scrolling functional.
+  }
+}
+
+function persistCurrentScroll(threadId: string | null, container: HTMLElement | null) {
+  if (!threadId || !container) {
+    return;
+  }
+
+  writeThreadScroll(threadId, container.scrollTop);
 }

@@ -158,14 +158,20 @@ async function runStagedMode(input: RunInput & { runId: string; writer: StreamWr
   emitLifecycle(input, "stage_started", { stage: "stage_1", label: "Stage 1: Intro + plan" });
 
   const introPrompt = `${presetGuidance(input.settings.preset)}
-Write only the introduction for the requested piece. Keep it engaging, purposeful, and ready to flow into planned sections.
+If the user request is simple conversational chat, acknowledgements, greetings, or does not benefit from structured sections,
+write the complete final reply instead of an introduction.
+Otherwise write only the introduction for the requested piece. Keep it engaging, purposeful, and ready to flow into planned sections.
+Do not mention stages, sections, or planning.
 
 User request:
 ${input.prompt}`;
   const introBranchId = announceBranch(input, "stage_1", "intro", introPrompt, "Intro draft");
 
   const planVariantA = `${presetGuidance(input.settings.preset)}
-Plan 3 to 5 sections for the piece.
+Decide whether the request needs structured sections.
+If the best response is a short direct reply, output exactly:
+NONE
+Otherwise plan 3 to 5 sections for the piece.
 Output one section per line in this exact format:
 TITLE::BRIEF
 Do not add numbering, bullets, commentary, markdown fences, or any extra lines.
@@ -174,7 +180,9 @@ Focus on clarity and logical flow.
 User request:
 ${input.prompt}`;
   const planVariantB = `${presetGuidance(input.settings.preset)}
-Return JSON only. Create a concise JSON array of 3 to 5 sections.
+Return JSON only.
+If the best response is a short direct reply that does not need sections, return [].
+Otherwise create a concise JSON array of 3 to 5 sections.
 Each item must contain title and brief.
 Focus on momentum, contrast, and strong reader progression.
 
@@ -245,6 +253,33 @@ ${input.prompt}`;
   ]);
   input.writer.send({ type: "section_plan", runId: input.runId, sections });
   emitLifecycle(input, "stage_completed", { stage: "stage_1" });
+
+  if (sections.length === 0) {
+    const assistantMessage = createMessage({
+      threadId: input.threadId,
+      runId: input.runId,
+      role: "assistant",
+      messageType: "assistant",
+      content: introText
+    });
+
+    updateRun(input.runId, {
+      status: "completed",
+      stage: "completed",
+      assembledOutput: introText,
+      assistantMessageId: assistantMessage.id
+    });
+
+    input.writer.send({
+      type: "run_completed",
+      runId: input.runId,
+      threadId: input.threadId,
+      messageId: assistantMessage.id,
+      content: introText
+    });
+    input.writer.close();
+    return;
+  }
 
   updateRun(input.runId, { stage: "stage_2", assembledOutput: introText });
   emitLifecycle(input, "stage_started", { stage: "stage_2", label: "Stage 2: Parallel sections" });
@@ -444,6 +479,11 @@ function parseSections(raw: string) {
 }
 
 function parseLineSections(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "NONE") {
+    return [];
+  }
+
   return raw
     .split("\n")
     .map((line) => line.trim())
@@ -501,14 +541,6 @@ function consolidateSections(input: Array<{ title: string; brief: string }>) {
 
     seen.add(key);
     sections.push(section);
-  }
-
-  if (sections.length === 0) {
-    return [
-      { title: "Core ideas", brief: "Explain the central argument or concept clearly." },
-      { title: "Practical breakdown", brief: "Develop the most useful supporting details and examples." },
-      { title: "Closing takeaways", brief: "Land the piece with concrete takeaways and momentum." }
-    ];
   }
 
   return sections.slice(0, 5);
