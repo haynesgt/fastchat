@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
 import {
   BootstrapState,
   Message,
@@ -31,7 +33,6 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     void loadBootstrap();
@@ -44,10 +45,6 @@ export function App() {
 
     void loadThread(selectedThreadId);
   }, [selectedThreadId, threadDetails]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [selectedThreadId, threadDetails, pending]);
 
   const selectedThread = selectedThreadId ? threadDetails[selectedThreadId] : null;
 
@@ -331,6 +328,19 @@ export function App() {
       return;
     }
 
+    if (event.type === "section_planned") {
+      setPending((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextSections = [...current.sections];
+        nextSections[event.index] = { title: event.title, brief: event.brief };
+        return { ...current, sections: nextSections };
+      });
+      return;
+    }
+
     if (event.type === "section_completed") {
       setPending((current) =>
         current
@@ -530,7 +540,14 @@ export function App() {
                 <span>{message.role === "assistant" ? "Assistant" : "You"}</span>
                 <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
               </div>
-              <pre>{message.content}</pre>
+              {message.role === "assistant" ? (
+                <div
+                  className="markdown-body"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+                />
+              ) : (
+                <pre>{message.content}</pre>
+              )}
             </article>
           ))}
 
@@ -541,8 +558,7 @@ export function App() {
               {pending.sections.length > 0 ? <p>{pending.sections.length} planned sections</p> : null}
             </div>
           ) : null}
-
-          <div ref={messagesEndRef} />
+          <div className="message-buffer" aria-hidden="true" />
         </section>
 
         <form className="composer" onSubmit={(event) => void handleSend(event)}>
@@ -550,6 +566,12 @@ export function App() {
             placeholder="Write the thing you want drafted..."
             value={composer}
             onChange={(event) => setComposer(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && event.ctrlKey && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
             rows={5}
           />
           <div className="composer-footer">
@@ -568,4 +590,8 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function renderMarkdown(content: string) {
+  return DOMPurify.sanitize(marked.parse(content, { breaks: true }) as string);
 }

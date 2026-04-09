@@ -152,6 +152,7 @@ async function runStagedMode(input: RunInput & { runId: string; writer: StreamWr
   const context = buildConversationMessages(input.threadId, input.settings);
   let introText = "";
   let summaryText = "";
+  let plannedSectionCount = 0;
 
   updateRun(input.runId, { stage: "stage_1" });
   emitLifecycle(input, "stage_started", { stage: "stage_1", label: "Stage 1: Intro + plan" });
@@ -163,10 +164,22 @@ User request:
 ${input.prompt}`;
   const introBranchId = announceBranch(input, "stage_1", "intro", introPrompt, "Intro draft");
 
-  const planVariantA =
-    "Create a concise JSON array of 3 to 5 sections. Each item must contain title and brief. Focus on clarity and logical flow.";
-  const planVariantB =
-    "Create a concise JSON array of 3 to 5 sections. Each item must contain title and brief. Focus on momentum, contrast, and strong reader progression.";
+  const planVariantA = `${presetGuidance(input.settings.preset)}
+Plan 3 to 5 sections for the piece.
+Output one section per line in this exact format:
+TITLE::BRIEF
+Do not add numbering, bullets, commentary, markdown fences, or any extra lines.
+Focus on clarity and logical flow.
+
+User request:
+${input.prompt}`;
+  const planVariantB = `${presetGuidance(input.settings.preset)}
+Return JSON only. Create a concise JSON array of 3 to 5 sections.
+Each item must contain title and brief.
+Focus on momentum, contrast, and strong reader progression.
+
+User request:
+${input.prompt}`;
 
   const planBranchAId = announceBranch(input, "stage_1", "plan_a", planVariantA, "Plan branch A");
   const planBranchBId = announceBranch(input, "stage_1", "plan_b", planVariantB, "Plan branch B");
@@ -185,31 +198,51 @@ ${input.prompt}`;
     return output;
   });
 
-  const planPromises = [planVariantA, planVariantB].map((variantPrompt, index) =>
-    completeChat({
-      apiKey: input.settings.apiKey,
-      model: input.settings.model,
-      signal: input.signal,
-      messages: [
-        ...context,
-        {
-          role: "user",
-          content: `${presetGuidance(input.settings.preset)}
-Return JSON only. ${variantPrompt}
+  let streamedPlanText = "";
+  let planLineBuffer = "";
+  const streamedPlanPromise = streamChat({
+    apiKey: input.settings.apiKey,
+    model: input.settings.model,
+    signal: input.signal,
+    messages: [...context, { role: "user", content: planVariantA }],
+    onDelta(delta) {
+      streamedPlanText += delta;
+      planLineBuffer += delta;
+      planLineBuffer = flushPlannedSections(planLineBuffer, input, plannedSectionCount, (count) => {
+        plannedSectionCount = count;
+      });
+    }
+  }).then((output) => {
+    if (planLineBuffer.trim()) {
+      flushPlannedSections(`${planLineBuffer}\n`, input, plannedSectionCount, (count) => {
+        plannedSectionCount = count;
+      });
+      planLineBuffer = "";
+    }
+    finishBranch(planBranchAId, output, "completed");
+    return output;
+  });
 
-User request:
-${input.prompt}`
-        }
-      ]
-    }).then((output) => {
-      finishBranch(index === 0 ? planBranchAId : planBranchBId, output, "completed");
-      return output;
-    })
-  );
+  const hiddenPlanPromise = completeChat({
+    apiKey: input.settings.apiKey,
+    model: input.settings.model,
+    signal: input.signal,
+    messages: [...context, { role: "user", content: planVariantB }]
+  }).then((output) => {
+    finishBranch(planBranchBId, output, "completed");
+    return output;
+  });
 
-  const [introResult, ...planResults] = await Promise.all([introPromise, ...planPromises]);
+  const [introResult, streamedPlanResult, hiddenPlanResult] = await Promise.all([
+    introPromise,
+    streamedPlanPromise,
+    hiddenPlanPromise
+  ]);
   introText = introResult;
-  const sections = consolidateSections(planResults.flatMap((plan) => parseSections(plan)));
+  const sections = consolidateSections([
+    ...parseLineSections(streamedPlanResult),
+    ...parseSections(hiddenPlanResult)
+  ]);
   input.writer.send({ type: "section_plan", runId: input.runId, sections });
   emitLifecycle(input, "stage_completed", { stage: "stage_1" });
 
@@ -225,6 +258,8 @@ ${input.prompt}`
 Write section ${index + 1} titled "${section.title}".
 Follow this section brief: ${section.brief}
 Keep the section self-contained and do not write the introduction or conclusion.
+Do not repeat the section title, heading, number, or label in the output.
+Start immediately with the section body content.
 
 Full section plan:
 ${sections.map((entry, itemIndex) => `${itemIndex + 1}. ${entry.title}: ${entry.brief}`).join("\n")}
@@ -276,6 +311,8 @@ ${input.prompt}`;
 
   const summaryPrompt = `${presetGuidance(input.settings.preset)}
 Write a closing summary or conclusion for the piece below. Keep it crisp and satisfying.
+Do not add a heading like "Summary", "Conclusion", or any title line.
+Return only the closing body paragraphs.
 
 Introduction:
 ${introText}
@@ -404,6 +441,52 @@ function parseSections(raw: string) {
   } catch {
     return [];
   }
+}
+
+function parseLineSections(raw: string) {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      const separatorIndex = line.indexOf("::");
+      if (separatorIndex === -1) {
+        return [];
+      }
+
+      const title = line.slice(0, separatorIndex).trim();
+      const brief = line.slice(separatorIndex + 2).trim();
+      if (!title || !brief) {
+        return [];
+      }
+
+      return [{ title, brief }];
+    });
+}
+
+function flushPlannedSections(
+  buffer: string,
+  input: RunInput & { runId: string; writer: StreamWriter },
+  startIndex: number,
+  onCountChange: (count: number) => void
+) {
+  const lines = buffer.split("\n");
+  const remainder = lines.pop() ?? "";
+  const parsedSections = lines.flatMap((line) => parseLineSections(line));
+
+  for (const [index, section] of parsedSections.entries()) {
+    input.writer.send({
+      type: "section_planned",
+      runId: input.runId,
+      index: startIndex + index,
+      title: section.title,
+      brief: section.brief
+    });
+  }
+
+  onCountChange(startIndex + parsedSections.length);
+
+  return remainder;
 }
 
 function consolidateSections(input: Array<{ title: string; brief: string }>) {

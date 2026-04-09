@@ -58,6 +58,7 @@ export type StreamEvent =
   | { type: "stage_started"; runId: string; stage: string; label: string }
   | { type: "branch_started"; runId: string; stage: string; branchKey: string; label: string }
   | { type: "text_delta"; runId: string; target: "chat" | "intro" | "summary"; delta: string }
+  | { type: "section_planned"; runId: string; index: number; title: string; brief: string }
   | { type: "section_plan"; runId: string; sections: SectionPlan[] }
   | { type: "section_delta"; runId: string; index: number; title: string; delta: string }
   | { type: "section_completed"; runId: string; index: number; title: string; content: string }
