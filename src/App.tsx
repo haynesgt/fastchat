@@ -367,6 +367,30 @@ export function App() {
       return;
     }
 
+    if (event.type === "thread_title") {
+      setActiveThreads((current) =>
+        current.map((thread) => (thread.id === event.threadId ? { ...thread, title: event.title } : thread))
+      );
+      setArchivedThreads((current) =>
+        current.map((thread) => (thread.id === event.threadId ? { ...thread, title: event.title } : thread))
+      );
+      setThreadDetails((current) => {
+        const detail = current[event.threadId];
+        if (!detail) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [event.threadId]: {
+            ...detail,
+            thread: { ...detail.thread, title: event.title }
+          }
+        };
+      });
+      return;
+    }
+
     if (event.type === "stage_started") {
       setPending((current) => (current ? { ...current, statusLabel: event.label } : current));
       return;

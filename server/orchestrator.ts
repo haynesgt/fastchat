@@ -6,8 +6,10 @@ import {
   DbMessage,
   finishBranch,
   getRun,
+  getThread,
   listMessages,
   nowIso,
+  updateThreadTitle,
   updateRun
 } from "./db.js";
 import { ChatMessage, completeChat, streamChat } from "./openai.js";
@@ -52,6 +54,12 @@ export async function runConversation(input: RunInput, writer: StreamWriter) {
   writer.send({ type: "run_started", runId, threadId: input.threadId, mode: effectiveMode });
 
   try {
+    const generatedTitle = await maybeGenerateThreadTitle(input).catch(() => null);
+    if (generatedTitle) {
+      const updatedThread = updateThreadTitle(input.threadId, generatedTitle);
+      writer.send({ type: "thread_title", threadId: updatedThread.id, title: updatedThread.title });
+    }
+
     if (effectiveMode === "chat") {
       await runChatMode({ ...input, runId, writer });
     } else {
@@ -559,4 +567,50 @@ Choose CHAT only for clearly conversational or lightweight requests that do not 
   });
 
   return decision.trim().toUpperCase() === "STAGED" ? "staged" : "chat";
+}
+
+async function maybeGenerateThreadTitle(input: RunInput) {
+  const thread = getThread(input.threadId);
+  if (!thread || thread.title !== "Untitled thread") {
+    return null;
+  }
+
+  const title = await completeChat({
+    apiKey: input.settings.apiKey,
+    model: input.settings.model,
+    signal: input.signal,
+    useWebSearch: false,
+    messages: [
+      {
+        role: "system",
+        content: `Write a short chat title for this conversation.
+Return only the title text.
+Aim for 2 to 4 words.
+Do not quote it.
+Do not add punctuation unless truly necessary.
+Do not simply copy the full user message.
+Prefer a compact, descriptive title that would look good in a sidebar.`
+      },
+      {
+        role: "user",
+        content: input.prompt
+      }
+    ]
+  });
+
+  return sanitizeGeneratedTitle(title);
+}
+
+function sanitizeGeneratedTitle(title: string) {
+  const cleaned = title
+    .replace(/["'`#*_~[\]{}]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return null;
+  }
+
+  const words = cleaned.split(" ").slice(0, 4);
+  return words.join(" ").slice(0, 48) || null;
 }

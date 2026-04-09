@@ -326,10 +326,7 @@ function syncThreadMetadata(
 
   const preview = toSingleLinePreview(message.content);
   const thread = getThread(threadId);
-  const nextTitle =
-    thread && thread.title === "Untitled thread" && message.role === "user"
-      ? toCompactTitle(preview) || thread.title
-      : thread?.title ?? "Untitled thread";
+  const nextTitle = thread?.title ?? "Untitled thread";
 
   db.prepare(`UPDATE threads SET updated_at = ?, last_preview = ?, title = ? WHERE id = ?`).run(
     timestamp,
@@ -347,17 +344,4 @@ function toSingleLinePreview(content: string) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 180);
-}
-
-function toCompactTitle(preview: string) {
-  const words = preview
-    .split(/\s+/)
-    .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
-    .filter(Boolean);
-
-  if (words.length === 0) {
-    return "";
-  }
-
-  return words.slice(0, Math.min(4, Math.max(2, words.length))).join(" ").slice(0, 48);
 }

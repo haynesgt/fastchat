@@ -57,6 +57,7 @@ export type SectionPlan = {
 
 export type StreamEvent =
   | { type: "run_started"; runId: string; threadId: string; mode: "chat" | "staged" }
+  | { type: "thread_title"; threadId: string; title: string }
   | { type: "stage_started"; runId: string; stage: string; label: string }
   | { type: "branch_started"; runId: string; stage: string; branchKey: string; label: string }
   | { type: "text_delta"; runId: string; target: "chat" | "intro" | "summary"; delta: string }

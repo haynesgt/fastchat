@@ -8,10 +8,24 @@ type BaseCompletionInput = {
   model: string;
   messages: ChatMessage[];
   signal?: AbortSignal;
+  useWebSearch?: boolean;
 };
 
 export async function completeChat(input: BaseCompletionInput) {
   const [instructions, conversation] = splitInstructions(input.messages);
+  const tools =
+    input.useWebSearch === false
+      ? []
+      : [
+          {
+            type: "web_search",
+            user_location: {
+              type: "approximate",
+              country: "US",
+              timezone: "America/Vancouver"
+            }
+          }
+        ];
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -28,17 +42,8 @@ export async function completeChat(input: BaseCompletionInput) {
       })),
       tool_choice: "auto",
       parallel_tool_calls: true,
-      tools: [
-        {
-          type: "web_search",
-          user_location: {
-            type: "approximate",
-            country: "US",
-            timezone: "America/Vancouver"
-          }
-        }
-      ],
-      include: ["web_search_call.action.sources"]
+      tools,
+      include: input.useWebSearch === false ? [] : ["web_search_call.action.sources"]
     }),
     signal: input.signal
   });
@@ -57,6 +62,19 @@ export async function streamChat(
   }
 ) {
   const [instructions, conversation] = splitInstructions(input.messages);
+  const tools =
+    input.useWebSearch === false
+      ? []
+      : [
+          {
+            type: "web_search",
+            user_location: {
+              type: "approximate",
+              country: "US",
+              timezone: "America/Vancouver"
+            }
+          }
+        ];
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -73,17 +91,8 @@ export async function streamChat(
       })),
       tool_choice: "auto",
       parallel_tool_calls: true,
-      tools: [
-        {
-          type: "web_search",
-          user_location: {
-            type: "approximate",
-            country: "US",
-            timezone: "America/Vancouver"
-          }
-        }
-      ],
-      include: ["web_search_call.action.sources"],
+      tools,
+      include: input.useWebSearch === false ? [] : ["web_search_call.action.sources"],
       stream: true
     }),
     signal: input.signal
