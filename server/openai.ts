@@ -11,7 +11,9 @@ type BaseCompletionInput = {
 };
 
 export async function completeChat(input: BaseCompletionInput) {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const [instructions, conversation] = splitInstructions(input.messages);
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -19,8 +21,24 @@ export async function completeChat(input: BaseCompletionInput) {
     },
     body: JSON.stringify({
       model: input.model,
-      temperature: 0.8,
-      messages: input.messages
+      instructions,
+      input: conversation.map((message) => ({
+        role: message.role,
+        content: message.content
+      })),
+      tool_choice: "auto",
+      parallel_tool_calls: true,
+      tools: [
+        {
+          type: "web_search",
+          user_location: {
+            type: "approximate",
+            country: "US",
+            timezone: "America/Vancouver"
+          }
+        }
+      ],
+      include: ["web_search_call.action.sources"]
     }),
     signal: input.signal
   });
@@ -29,11 +47,8 @@ export async function completeChat(input: BaseCompletionInput) {
     throw new Error(await response.text());
   }
 
-  const payload = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-
-  return payload.choices?.[0]?.message?.content ?? "";
+  const payload = (await response.json()) as ResponsePayload;
+  return extractOutputText(payload);
 }
 
 export async function streamChat(
@@ -41,7 +56,9 @@ export async function streamChat(
     onDelta: (delta: string) => void;
   }
 ) {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const [instructions, conversation] = splitInstructions(input.messages);
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -49,9 +66,25 @@ export async function streamChat(
     },
     body: JSON.stringify({
       model: input.model,
-      temperature: 0.8,
-      stream: true,
-      messages: input.messages
+      instructions,
+      input: conversation.map((message) => ({
+        role: message.role,
+        content: message.content
+      })),
+      tool_choice: "auto",
+      parallel_tool_calls: true,
+      tools: [
+        {
+          type: "web_search",
+          user_location: {
+            type: "approximate",
+            country: "US",
+            timezone: "America/Vancouver"
+          }
+        }
+      ],
+      include: ["web_search_call.action.sources"],
+      stream: true
     }),
     signal: input.signal
   });
@@ -86,17 +119,51 @@ export async function streamChat(
         continue;
       }
 
-      const payload = JSON.parse(data) as {
-        choices?: Array<{ delta?: { content?: string } }>;
-      };
+      const payload = JSON.parse(data) as
+        | { type?: string; delta?: string }
+        | { type?: string; error?: { message?: string } };
 
-      const delta = payload.choices?.[0]?.delta?.content ?? "";
-      if (delta) {
-        fullText += delta;
-        input.onDelta(delta);
+      if (payload.type === "response.output_text.delta" && "delta" in payload && payload.delta) {
+        fullText += payload.delta;
+        input.onDelta(payload.delta);
+      }
+
+      if (payload.type === "error") {
+        throw new Error(("error" in payload && payload.error?.message) || "Streaming response failed.");
       }
     }
   }
 
   return fullText;
+}
+
+type ResponsePayload = {
+  output?: Array<{
+    type?: string;
+    role?: string;
+    content?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+};
+
+function splitInstructions(messages: ChatMessage[]) {
+  const [first, ...rest] = messages;
+  if (first?.role === "system") {
+    return [first.content, rest] as const;
+  }
+
+  return ["", messages] as const;
+}
+
+function extractOutputText(payload: ResponsePayload) {
+  return (
+    payload.output
+      ?.filter((item) => item.type === "message")
+      .flatMap((item) => item.content ?? [])
+      .filter((part) => part.type === "output_text")
+      .map((part) => part.text ?? "")
+      .join("") ?? ""
+  );
 }
