@@ -47,6 +47,8 @@ export function App() {
   const [planCache, setPlanCache] = useState<Record<string, RunPlanResponse>>({});
   const [isLoadingPlanRunId, setIsLoadingPlanRunId] = useState<string | null>(null);
   const [planErrorRunId, setPlanErrorRunId] = useState<string | null>(null);
+  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const abortRef = useRef<AbortController | null>(null);
   const messageStreamRef = useRef<HTMLElement | null>(null);
   const activeScrollThreadRef = useRef<string | null>(null);
@@ -342,6 +344,14 @@ export function App() {
     } finally {
       setIsLoadingPlanRunId((current) => (current === runId ? null : current));
     }
+  }
+
+  function toggleMessageExpansion(messageId: string) {
+    setExpandedMessages((current) => ({ ...current, [messageId]: !current[messageId] }));
+  }
+
+  function toggleSectionExpansion(sectionKey: string) {
+    setExpandedSections((current) => ({ ...current, [sectionKey]: !current[sectionKey] }));
   }
 
   async function handleSend(event: FormEvent<HTMLFormElement>) {
@@ -874,10 +884,14 @@ export function App() {
                 </div>
               ) : null}
               {message.role === "assistant" ? (
-                <div
-                  className="markdown-body"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
-                />
+                renderAssistantBody({
+                  message,
+                  pending,
+                  expandedMessages,
+                  expandedSections,
+                  onToggleMessage: toggleMessageExpansion,
+                  onToggleSection: toggleSectionExpansion
+                })
               ) : (
                 <pre>{message.content}</pre>
               )}
@@ -960,6 +974,245 @@ export function App() {
 
 function renderMarkdown(content: string) {
   return DOMPurify.sanitize(marked.parse(content, { breaks: true }) as string);
+}
+
+function renderAssistantBody(input: {
+  message: Message;
+  pending: PendingRunState | null;
+  expandedMessages: Record<string, boolean>;
+  expandedSections: Record<string, boolean>;
+  onToggleMessage: (messageId: string) => void;
+  onToggleSection: (sectionKey: string) => void;
+}) {
+  const { message, pending, expandedMessages, expandedSections, onToggleMessage, onToggleSection } = input;
+
+  if (message.id === pendingMessageId && pending?.mode === "staged") {
+    return (
+      <div className="assistant-stack">
+        {pending.intro.trim() ? (
+          <ScrollableBlock
+            bodyClassName="markdown-body"
+            content={renderMarkdown(pending.intro)}
+            expanded={Boolean(expandedMessages[`${message.id}:intro`])}
+            isHtml
+            label="Intro"
+            onToggle={isLongSectionContent(pending.intro) ? () => onToggleMessage(`${message.id}:intro`) : undefined}
+          />
+        ) : null}
+        {pending.sections.map((section, index) => {
+          const sectionKey = `${message.id}:section:${index}`;
+          const content = pending.sectionContents[index]?.trim() || "_Writing this section..._";
+          return renderSectionCard(section.title, content, sectionKey, expandedSections, onToggleSection);
+        })}
+        {pending.summary.trim() ? (
+          <ScrollableBlock
+            bodyClassName="markdown-body"
+            content={renderMarkdown(pending.summary)}
+            expanded={Boolean(expandedMessages[`${message.id}:summary`])}
+            isHtml
+            label="Summary"
+            onToggle={isLongSectionContent(pending.summary) ? () => onToggleMessage(`${message.id}:summary`) : undefined}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  const parsedSections = splitAssistantSections(message.content);
+  if (parsedSections) {
+    return (
+      <div className="assistant-stack">
+        {parsedSections.intro.trim() ? (
+          <ScrollableBlock
+            bodyClassName="markdown-body"
+            content={renderMarkdown(parsedSections.intro)}
+            expanded={Boolean(expandedMessages[`${message.id}:intro`])}
+            isHtml
+            label="Intro"
+            onToggle={
+              isLongSectionContent(parsedSections.intro) ? () => onToggleMessage(`${message.id}:intro`) : undefined
+            }
+          />
+        ) : null}
+        {parsedSections.sections.map((section, index) =>
+          renderSectionCard(
+            section.title,
+            section.content,
+            `${message.id}:section:${index}`,
+            expandedSections,
+            onToggleSection
+          )
+        )}
+        {parsedSections.summary.trim() ? (
+          <ScrollableBlock
+            bodyClassName="markdown-body"
+            content={renderMarkdown(parsedSections.summary)}
+            expanded={Boolean(expandedMessages[`${message.id}:summary`])}
+            isHtml
+            label="Summary"
+            onToggle={
+              isLongSectionContent(parsedSections.summary) ? () => onToggleMessage(`${message.id}:summary`) : undefined
+            }
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  const shouldClamp = isLongAssistantMessage(message.content);
+  const expanded = Boolean(expandedMessages[message.id]);
+
+  return (
+    <ScrollableBlock
+      bodyClassName="markdown-body"
+      content={renderMarkdown(message.content)}
+      expanded={expanded}
+      isHtml
+      label={shouldClamp ? undefined : undefined}
+      onToggle={shouldClamp ? () => onToggleMessage(message.id) : undefined}
+    />
+  );
+}
+
+function renderSectionCard(
+  title: string,
+  content: string,
+  sectionKey: string,
+  expandedSections: Record<string, boolean>,
+  onToggleSection: (sectionKey: string) => void
+) {
+  const canToggle = isLongSectionContent(content);
+  const isExpanded = Boolean(expandedSections[sectionKey]);
+
+  return (
+    <section className="assistant-section-card" key={sectionKey}>
+      <div className="assistant-section-header">
+        <h3>{title}</h3>
+        {canToggle ? (
+          <button
+            aria-label={isExpanded ? "Collapse section" : "Expand section"}
+            className="section-toggle-button"
+            onClick={() => onToggleSection(sectionKey)}
+            type="button"
+          >
+            {toggleSymbol(isExpanded)}
+          </button>
+        ) : null}
+      </div>
+      <div
+        className={`assistant-section-body ${isExpanded || !canToggle ? "expanded" : "collapsed"}`}
+        dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
+      />
+      {canToggle ? (
+        <div className="assistant-section-footer">
+          <button
+            aria-label={isExpanded ? "Collapse section" : "Expand section"}
+            className="section-toggle-button"
+            onClick={() => onToggleSection(sectionKey)}
+            type="button"
+          >
+            {toggleSymbol(isExpanded)}
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ScrollableBlock(input: {
+  content: string;
+  expanded: boolean;
+  isHtml?: boolean;
+  bodyClassName: string;
+  label?: string;
+  onToggle?: () => void;
+}) {
+  const { content, expanded, isHtml, bodyClassName, label, onToggle } = input;
+  const canToggle = Boolean(onToggle);
+
+  return (
+    <div className="assistant-block">
+      {label ? <div className="assistant-block-label">{label}</div> : null}
+      {canToggle ? (
+        <div className="assistant-block-controls">
+          <button
+            aria-label={expanded ? "Collapse section" : "Expand section"}
+            className="section-toggle-button assistant-block-toggle"
+            onClick={onToggle}
+            type="button"
+          >
+            {toggleSymbol(expanded)}
+          </button>
+        </div>
+      ) : null}
+      {isHtml ? (
+        <div
+          className={`${bodyClassName} assistant-scroll-body ${expanded ? "expanded" : canToggle ? "collapsed" : ""}`}
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+      ) : (
+        <div className={`${bodyClassName} assistant-scroll-body ${expanded ? "expanded" : canToggle ? "collapsed" : ""}`}>
+          {content}
+        </div>
+      )}
+      {canToggle ? (
+        <div className="assistant-block-controls">
+          <button
+            aria-label={expanded ? "Collapse section" : "Expand section"}
+            className="section-toggle-button assistant-block-toggle"
+            onClick={onToggle}
+            type="button"
+          >
+            {toggleSymbol(expanded)}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function isLongAssistantMessage(content: string) {
+  return content.length > 1400 || content.split(/\n/).length > 18;
+}
+
+function isLongSectionContent(content: string) {
+  return content.length > 900 || content.split(/\n/).length > 10;
+}
+
+function toggleSymbol(expanded: boolean) {
+  return expanded ? "▴" : "▾";
+}
+
+function splitAssistantSections(content: string) {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const sectionMatches = [...normalized.matchAll(/^##\s+(.+)$/gm)];
+  if (sectionMatches.length === 0) {
+    return null;
+  }
+
+  const intro = normalized.slice(0, sectionMatches[0].index).trim();
+  const sections: Array<{ title: string; content: string }> = [];
+
+  for (let index = 0; index < sectionMatches.length; index += 1) {
+    const match = sectionMatches[index];
+    const title = match[1].trim();
+    const start = (match.index ?? 0) + match[0].length;
+    const end = index + 1 < sectionMatches.length ? (sectionMatches[index + 1].index ?? normalized.length) : normalized.length;
+    const body = normalized.slice(start, end).trim();
+    sections.push({ title, content: body });
+  }
+
+  let summary = "";
+  if (sections.length > 0) {
+    const lastSection = sections[sections.length - 1];
+    const summarySplit = lastSection.content.match(/\n(?=In summary\b|Overall\b|To sum up\b|Ultimately\b)/i);
+    if (summarySplit?.index) {
+      summary = lastSection.content.slice(summarySplit.index).trim();
+      lastSection.content = lastSection.content.slice(0, summarySplit.index).trim();
+    }
+  }
+
+  return { intro, sections, summary };
 }
 
 function groupBranchesByStage(branches: RunPlanResponse["branches"]) {

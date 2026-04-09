@@ -448,6 +448,105 @@ p {
   font-size: 0.9rem;
 }
 
+.assistant-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.assistant-block,
+.assistant-section-card {
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-block-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.assistant-section-card {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(38, 23, 14, 0.04);
+}
+
+.assistant-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assistant-section-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.assistant-scroll-body.collapsed,
+.assistant-section-body.collapsed {
+  max-height: 30rem;
+  overflow: auto;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
+}
+
+.assistant-scroll-body.expanded,
+.assistant-section-body.expanded {
+  max-height: none;
+  overflow: visible;
+}
+
+.assistant-section-body {
+  line-height: 1.65;
+}
+
+.assistant-section-body > :first-child {
+  margin-top: 0;
+}
+
+.assistant-section-body > :last-child {
+  margin-bottom: 0;
+}
+
+.assistant-section-body p,
+.assistant-section-body ul,
+.assistant-section-body ol,
+.assistant-section-body blockquote,
+.assistant-section-body pre,
+.assistant-section-body h1,
+.assistant-section-body h2,
+.assistant-section-body h3,
+.assistant-section-body h4 {
+  margin: 0 0 0.9rem;
+}
+
+.section-toggle-button {
+  border: none;
+  border-radius: 999px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: rgba(38, 23, 14, 0.08);
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.assistant-block-toggle {
+  justify-self: end;
+}
+
+.assistant-block-controls,
+.assistant-section-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .composer {
   padding: 12px 18px 18px;
   background: linear-gradient(
@@ -679,14 +778,18 @@ p {
 
 .thread-list::-webkit-scrollbar,
 .message-stream::-webkit-scrollbar,
-.markdown-body pre::-webkit-scrollbar {
+.markdown-body pre::-webkit-scrollbar,
+.assistant-scroll-body::-webkit-scrollbar,
+.assistant-section-body::-webkit-scrollbar {
   width: 12px;
   height: 12px;
 }
 
 .thread-list::-webkit-scrollbar-thumb,
 .message-stream::-webkit-scrollbar-thumb,
-.markdown-body pre::-webkit-scrollbar-thumb {
+.markdown-body pre::-webkit-scrollbar-thumb,
+.assistant-scroll-body::-webkit-scrollbar-thumb,
+.assistant-section-body::-webkit-scrollbar-thumb {
   background: rgba(122, 101, 87, 0.45);
   border: 3px solid transparent;
   border-radius: 999px;
@@ -695,7 +798,9 @@ p {
 
 .thread-list::-webkit-scrollbar-track,
 .message-stream::-webkit-scrollbar-track,
-.markdown-body pre::-webkit-scrollbar-track {
+.markdown-body pre::-webkit-scrollbar-track,
+.assistant-scroll-body::-webkit-scrollbar-track,
+.assistant-section-body::-webkit-scrollbar-track {
   background: transparent;
 }
 
