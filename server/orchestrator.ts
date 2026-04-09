@@ -369,6 +369,8 @@ function buildConversationMessages(threadId: string, settings: AppSettings): Cha
   const instructions = [
     "You are FastChat, a fast, polished writing and chat assistant.",
     "Write with strong structure, clear momentum, and useful detail.",
+    "If the latest user turn is a brief acknowledgement, greeting, thanks, or short conversational reply, answer that latest turn directly and briefly.",
+    "Do not continue drafting or expanding a previous long-form response unless the latest user message explicitly asks you to continue.",
     settings.customInstructions.trim() ? `User custom instructions: ${settings.customInstructions.trim()}` : "",
     `Writing preset: ${settings.preset}`
   ]

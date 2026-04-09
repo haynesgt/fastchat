@@ -427,7 +427,37 @@ export function App() {
       return;
     }
 
-    if (event.type === "run_cancelled" || event.type === "run_completed") {
+    if (event.type === "run_completed") {
+      setThreadDetails((current) => {
+        const detail = current[event.threadId];
+        if (!detail || detail.messages.some((message) => message.id === event.messageId)) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [event.threadId]: {
+            ...detail,
+            messages: [
+              ...detail.messages,
+              {
+                id: event.messageId,
+                threadId: event.threadId,
+                runId: event.runId,
+                role: "assistant",
+                messageType: "assistant",
+                content: event.content,
+                createdAt: new Date().toISOString()
+              }
+            ]
+          }
+        };
+      });
+      setPending(null);
+      return;
+    }
+
+    if (event.type === "run_cancelled") {
       setPending(null);
     }
   }
