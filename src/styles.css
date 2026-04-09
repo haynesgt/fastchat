@@ -563,7 +563,7 @@ p {
 }
 
 .message-buffer {
-  flex: 0 0 42vh;
+  flex: 0 0 100vh;
 }
 
 .thread-list::-webkit-scrollbar,
