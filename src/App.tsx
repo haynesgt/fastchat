@@ -15,7 +15,8 @@ const defaultSettings: Settings = {
   apiKey: "",
   customInstructions: "",
   model: "gpt-4.1-mini",
-  preset: "balanced"
+  preset: "balanced",
+  theme: "system"
 };
 
 const pendingMessageId = "__pending__";
@@ -47,6 +48,18 @@ export function App() {
       window.history.scrollRestoration = "manual";
     }
   }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      const resolved = settings.theme === "system" ? (media.matches ? "dark" : "light") : settings.theme;
+      document.documentElement.dataset.theme = resolved;
+    };
+
+    applyTheme();
+    media.addEventListener("change", applyTheme);
+    return () => media.removeEventListener("change", applyTheme);
+  }, [settings.theme]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -588,6 +601,22 @@ export function App() {
                 <option value="balanced">Balanced</option>
                 <option value="concise">Concise</option>
                 <option value="expansive">Expansive</option>
+              </select>
+            </label>
+            <label>
+              Theme
+              <select
+                value={settings.theme}
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    theme: event.target.value as Settings["theme"]
+                  }))
+                }
+              >
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
               </select>
             </label>
             <label>

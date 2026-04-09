@@ -67,7 +67,8 @@ db.exec(`
     api_key TEXT NOT NULL DEFAULT '',
     custom_instructions TEXT NOT NULL DEFAULT '',
     model TEXT NOT NULL DEFAULT 'gpt-4.1-mini',
-    preset TEXT NOT NULL DEFAULT 'balanced'
+    preset TEXT NOT NULL DEFAULT 'balanced',
+    theme TEXT NOT NULL DEFAULT 'system'
   );
 
   CREATE TABLE IF NOT EXISTS runs (
@@ -104,9 +105,14 @@ db.exec(`
   );
 `);
 
+const settingsColumns = db.prepare(`PRAGMA table_info(settings)`).all() as Array<{ name: string }>;
+if (!settingsColumns.some((column) => column.name === "theme")) {
+  db.exec(`ALTER TABLE settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'`);
+}
+
 db.prepare(
-  `INSERT INTO settings (id, api_key, custom_instructions, model, preset)
-   VALUES (1, '', '', 'gpt-4.1-mini', 'balanced')
+  `INSERT INTO settings (id, api_key, custom_instructions, model, preset, theme)
+   VALUES (1, '', '', 'gpt-4.1-mini', 'balanced', 'system')
    ON CONFLICT(id) DO NOTHING`
 ).run();
 
@@ -268,11 +274,12 @@ export function finishBranch(branchId: string, output: string, status: "complete
 }
 
 export function getSettings() {
-  return db.prepare(`SELECT api_key, custom_instructions, model, preset FROM settings WHERE id = 1`).get() as {
+  return db.prepare(`SELECT api_key, custom_instructions, model, preset, theme FROM settings WHERE id = 1`).get() as {
     api_key: string;
     custom_instructions: string;
     model: string;
     preset: "balanced" | "concise" | "expansive";
+    theme: "system" | "light" | "dark";
   };
 }
 
@@ -281,12 +288,14 @@ export function saveSettings(input: {
   customInstructions: string;
   model: string;
   preset: "balanced" | "concise" | "expansive";
+  theme: "system" | "light" | "dark";
 }) {
-  db.prepare(`UPDATE settings SET api_key = ?, custom_instructions = ?, model = ?, preset = ? WHERE id = 1`).run(
+  db.prepare(`UPDATE settings SET api_key = ?, custom_instructions = ?, model = ?, preset = ?, theme = ? WHERE id = 1`).run(
     input.apiKey,
     input.customInstructions,
     input.model,
-    input.preset
+    input.preset,
+    input.theme
   );
   return getSettings();
 }

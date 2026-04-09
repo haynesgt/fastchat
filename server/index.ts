@@ -25,7 +25,8 @@ const settingsSchema = z.object({
   apiKey: z.string(),
   customInstructions: z.string(),
   model: z.string().min(1),
-  preset: z.enum(["balanced", "concise", "expansive"])
+  preset: z.enum(["balanced", "concise", "expansive"]),
+  theme: z.enum(["system", "light", "dark"])
 });
 
 const runSchema = z.object({
@@ -226,6 +227,7 @@ function mapSettings(settings: ReturnType<typeof getSettings>) {
     apiKey: settings.api_key,
     customInstructions: settings.custom_instructions,
     model: settings.model,
-    preset: settings.preset
+    preset: settings.preset,
+    theme: settings.theme
   };
 }

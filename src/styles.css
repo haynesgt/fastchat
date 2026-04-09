@@ -18,6 +18,19 @@ body,
   font-family: "Trebuchet MS", "Segoe UI Variable", "Segoe UI", sans-serif;
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #171514;
+  --panel: rgba(26, 24, 23, 0.88);
+  --panel-strong: rgba(34, 30, 28, 0.98);
+  --ink: #f0e7dc;
+  --muted: #bbaea1;
+  --accent: #ff8b4d;
+  --accent-strong: #ffb07c;
+  --line: rgba(240, 231, 220, 0.12);
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -30,7 +43,7 @@ body {
   background:
     radial-gradient(circle at top left, rgba(212, 106, 47, 0.26), transparent 34%),
     radial-gradient(circle at top right, rgba(56, 120, 103, 0.18), transparent 28%),
-    linear-gradient(180deg, #f8f3ea 0%, #efe2c8 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 84%, white 16%) 0%, var(--bg) 100%);
 }
 
 button,
@@ -155,7 +168,7 @@ p {
 .thread-card.active {
   transform: translateY(-1px);
   border-color: rgba(212, 106, 47, 0.38);
-  background: rgba(255, 248, 237, 0.42);
+  background: color-mix(in srgb, var(--panel-strong) 58%, transparent 42%);
 }
 
 .thread-card span,
@@ -266,7 +279,7 @@ p {
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.76);
+  background: color-mix(in srgb, var(--panel-strong) 82%, white 18%);
   color: var(--ink);
 }
 
@@ -303,12 +316,12 @@ p {
 
 .message.user {
   align-self: flex-end;
-  background: rgba(212, 106, 47, 0.12);
+  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
 }
 
 .message.assistant {
   align-self: stretch;
-  background: rgba(255, 255, 255, 0.76);
+  background: color-mix(in srgb, var(--panel-strong) 84%, white 16%);
   position: relative;
 }
 
@@ -326,7 +339,12 @@ p {
 
 .composer {
   padding: 12px 18px 18px;
-  background: linear-gradient(180deg, rgba(245, 239, 227, 0) 0%, rgba(245, 239, 227, 0.92) 18%, rgba(245, 239, 227, 1) 100%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 0%, transparent 100%) 0%,
+    color-mix(in srgb, var(--bg) 92%, transparent 8%) 18%,
+    var(--bg) 100%
+  );
 }
 
 .composer-field {
@@ -337,7 +355,7 @@ p {
   resize: vertical;
   min-height: 120px;
   padding: 18px 216px 18px 18px;
-  background: rgba(255, 251, 244, 0.96);
+  background: color-mix(in srgb, var(--panel-strong) 90%, white 10%);
 }
 
 .composer .primary-button {
@@ -370,7 +388,7 @@ p {
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgba(255, 251, 244, 0.98);
+  background: var(--panel-strong);
   box-shadow: 0 20px 40px rgba(58, 33, 18, 0.12);
 }
 
@@ -402,7 +420,7 @@ p {
   text-align: center;
   border-radius: 28px;
   border: 1px dashed rgba(122, 101, 87, 0.35);
-  background: rgba(255, 255, 255, 0.5);
+  background: color-mix(in srgb, var(--panel) 78%, transparent 22%);
 }
 
 .status-rail {
@@ -485,7 +503,7 @@ p {
   overflow: hidden;
   border: 1px solid rgba(38, 23, 14, 0.12);
   border-radius: 18px;
-  background: rgba(255, 252, 247, 0.92);
+  background: color-mix(in srgb, var(--panel-strong) 86%, white 14%);
 }
 
 .markdown-body thead {

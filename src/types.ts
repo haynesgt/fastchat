@@ -22,6 +22,7 @@ export type Settings = {
   customInstructions: string;
   model: string;
   preset: "balanced" | "concise" | "expansive";
+  theme: "system" | "light" | "dark";
 };
 
 export type RunRecord = {
