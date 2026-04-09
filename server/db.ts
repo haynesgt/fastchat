@@ -34,6 +34,22 @@ export type DbRun = {
   updated_at: string;
 };
 
+export type DbRunBranch = {
+  id: string;
+  run_id: string;
+  stage: string;
+  branch_key: string;
+  status: "running" | "completed" | "failed";
+  title: string | null;
+  section_index: number | null;
+  prompt: string;
+  output: string;
+  meta_json: string;
+  started_at: string;
+  completed_at: string | null;
+  error: string | null;
+};
+
 const dataDir = path.resolve(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, "fastchat.db");
@@ -234,6 +250,14 @@ export function getRun(runId: string) {
       `SELECT * FROM runs WHERE id = ?`
     )
     .get(runId);
+}
+
+export function listRunBranches(runId: string) {
+  return db
+    .prepare<unknown[], DbRunBranch>(
+      `SELECT * FROM run_branches WHERE run_id = ? ORDER BY started_at ASC, stage ASC, branch_key ASC`
+    )
+    .all(runId);
 }
 
 export function createBranch(input: {

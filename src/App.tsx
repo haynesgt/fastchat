@@ -4,7 +4,9 @@ import { marked } from "marked";
 import {
   BootstrapState,
   Message,
+  ModelsResponse,
   PendingRunState,
+  RunPlanResponse,
   Settings,
   StreamEvent,
   ThreadDetail,
@@ -37,6 +39,14 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showComposerMenu, setShowComposerMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [modelLoadError, setModelLoadError] = useState<string | null>(null);
+  const [modelsCachedAt, setModelsCachedAt] = useState<number | null>(null);
+  const [openPlanRunId, setOpenPlanRunId] = useState<string | null>(null);
+  const [planCache, setPlanCache] = useState<Record<string, RunPlanResponse>>({});
+  const [isLoadingPlanRunId, setIsLoadingPlanRunId] = useState<string | null>(null);
+  const [planErrorRunId, setPlanErrorRunId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const messageStreamRef = useRef<HTMLElement | null>(null);
   const activeScrollThreadRef = useRef<string | null>(null);
@@ -110,6 +120,18 @@ export function App() {
       persistCurrentScroll(activeScrollThreadRef.current, messageStreamRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showSettings || settings.apiKey.trim().length < 20) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadModels(false);
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [showSettings, settings.apiKey]);
 
   const renderedMessages = useMemo(() => {
     if (!selectedThread) {
@@ -249,6 +271,76 @@ export function App() {
       setShowSettings(false);
     } finally {
       setIsSavingSettings(false);
+    }
+  }
+
+  async function loadModels(refresh: boolean) {
+    const apiKey = settings.apiKey.trim();
+    if (!apiKey) {
+      setAvailableModels([]);
+      setModelLoadError(null);
+      setModelsCachedAt(null);
+      return;
+    }
+
+    setIsLoadingModels(true);
+    setModelLoadError(null);
+
+    try {
+      const response = await fetch("/api/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, refresh })
+      });
+      const data = (await response.json()) as ModelsResponse;
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to load models.");
+      }
+
+      setAvailableModels(data.models);
+      setModelsCachedAt(data.cachedAt);
+
+      if (data.models.length > 0 && !data.models.includes(settings.model)) {
+        setSettings((current) => ({
+          ...current,
+          model: data.models[0]
+        }));
+      }
+    } catch (loadError) {
+      setModelLoadError((loadError as Error).message);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  }
+
+  async function toggleRunPlan(runId: string) {
+    if (openPlanRunId === runId) {
+      setOpenPlanRunId(null);
+      setPlanErrorRunId(null);
+      return;
+    }
+
+    setOpenPlanRunId(runId);
+    setPlanErrorRunId(null);
+
+    if (planCache[runId]) {
+      return;
+    }
+
+    setIsLoadingPlanRunId(runId);
+    try {
+      const response = await fetch(`/api/runs/${runId}/plan`);
+      const data = (await response.json()) as RunPlanResponse;
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to load execution plan.");
+      }
+
+      setPlanCache((current) => ({ ...current, [runId]: data }));
+    } catch (loadError) {
+      setPlanErrorRunId(runId);
+      setError((loadError as Error).message);
+    } finally {
+      setIsLoadingPlanRunId((current) => (current === runId ? null : current));
     }
   }
 
@@ -622,11 +714,36 @@ export function App() {
                 value={settings.model}
                 onChange={(event) => setSettings((current) => ({ ...current, model: event.target.value }))}
               >
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="gpt-4.1">gpt-4.1</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                {availableModels.length === 0 ? <option value={settings.model}>{settings.model}</option> : null}
+                {availableModels.length > 0 && !availableModels.includes(settings.model) ? (
+                  <option value={settings.model}>{settings.model}</option>
+                ) : null}
+                {availableModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
               </select>
             </label>
+            <div className="settings-inline-row">
+              <button
+                className="ghost-button"
+                disabled={isLoadingModels || settings.apiKey.trim().length === 0}
+                onClick={() => void loadModels(true)}
+                type="button"
+              >
+                {isLoadingModels ? "Loading models..." : "Refresh models"}
+              </button>
+              <span className="settings-help-text">
+                {modelLoadError
+                  ? modelLoadError
+                  : modelsCachedAt
+                    ? `Cached ${new Date(modelsCachedAt).toLocaleTimeString()}`
+                    : settings.apiKey.trim()
+                      ? "Load the latest models for this API key."
+                      : "Add an API key to load current models."}
+              </span>
+            </div>
             <label>
               Writing preset
               <select
@@ -709,11 +826,52 @@ export function App() {
               <div className="message-meta">
                 <span>{message.role === "assistant" ? "Assistant" : "You"}</span>
                 <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
+                {message.role === "assistant" && message.runId && message.id !== pendingMessageId ? (
+                  <button
+                    className="message-meta-action"
+                    onClick={() => void toggleRunPlan(message.runId!)}
+                    type="button"
+                  >
+                    Plan
+                  </button>
+                ) : null}
               </div>
               {message.id === pendingMessageId && pending ? (
                 <button className="inline-stop-button" onClick={() => void stopRun()}>
                   Stop
                 </button>
+              ) : null}
+              {message.role === "assistant" && message.runId && openPlanRunId === message.runId ? (
+                <div className="plan-popover">
+                  <div className="plan-popover-header">
+                    <strong>Execution plan</strong>
+                    <button className="plan-close-button" onClick={() => setOpenPlanRunId(null)} type="button">
+                      Close
+                    </button>
+                  </div>
+                  {isLoadingPlanRunId === message.runId ? <p className="plan-loading">Loading plan...</p> : null}
+                  {planErrorRunId === message.runId ? (
+                    <p className="plan-loading">Unable to load the saved plan for this response.</p>
+                  ) : null}
+                  {planCache[message.runId] ? (
+                    <div className="plan-stage-list">
+                      {groupBranchesByStage(planCache[message.runId].branches).map(([stage, branches]) => (
+                        <section key={stage} className="plan-stage">
+                          <h4>{formatStageLabel(stage)}</h4>
+                          {branches.map((branch) => (
+                            <div key={branch.id} className="plan-branch">
+                              <div className="plan-branch-header">
+                                <strong>{branch.title || branch.branchKey}</strong>
+                                <span>{branch.status}</span>
+                              </div>
+                              <p>{toSingleLine(branch.prompt)}</p>
+                            </div>
+                          ))}
+                        </section>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
               {message.role === "assistant" ? (
                 <div
@@ -802,6 +960,26 @@ export function App() {
 
 function renderMarkdown(content: string) {
   return DOMPurify.sanitize(marked.parse(content, { breaks: true }) as string);
+}
+
+function groupBranchesByStage(branches: RunPlanResponse["branches"]) {
+  const groups = new Map<string, RunPlanResponse["branches"]>();
+
+  for (const branch of branches) {
+    const current = groups.get(branch.stage) ?? [];
+    current.push(branch);
+    groups.set(branch.stage, current);
+  }
+
+  return [...groups.entries()];
+}
+
+function formatStageLabel(stage: string) {
+  return stage.replace(/_/g, " ").replace(/\bstage\b/gi, "Stage").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function toSingleLine(value: string) {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function readThreadScroll(threadId: string) {

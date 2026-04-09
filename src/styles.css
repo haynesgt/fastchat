@@ -271,6 +271,18 @@ p {
   font-size: 0.92rem;
 }
 
+.settings-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-help-text {
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
 .settings-panel input,
 .settings-panel textarea,
 .settings-panel select,
@@ -335,6 +347,105 @@ p {
 
 .message-meta span {
   display: block;
+}
+
+.message-meta-action {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(38, 23, 14, 0.08);
+  color: var(--muted);
+  font-size: 0.74rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.message:hover .message-meta-action,
+.message:focus-within .message-meta-action,
+.message-meta:hover .message-meta-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.message-meta-action:hover {
+  background: rgba(212, 106, 47, 0.14);
+  color: var(--ink);
+}
+
+.plan-popover {
+  margin-bottom: 14px;
+  max-width: 760px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 90%, var(--bg) 10%);
+}
+
+.plan-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.plan-close-button {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(38, 23, 14, 0.08);
+  color: var(--muted);
+}
+
+.plan-loading {
+  margin: 0;
+  color: var(--muted);
+}
+
+.plan-stage-list {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-stage {
+  display: grid;
+  gap: 8px;
+}
+
+.plan-stage h4 {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.plan-branch {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(38, 23, 14, 0.04);
+}
+
+.plan-branch-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-branch-header span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.plan-branch p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .composer {
@@ -629,5 +740,9 @@ p {
   .message.user .message-meta {
     right: -100px;
     left: auto;
+  }
+
+  .message-meta-action {
+    justify-self: end;
   }
 }

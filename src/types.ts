@@ -37,6 +37,27 @@ export type RunRecord = {
   updatedAt: string;
 };
 
+export type RunPlanBranch = {
+  id: string;
+  runId: string;
+  stage: string;
+  branchKey: string;
+  status: "running" | "completed" | "failed";
+  title: string | null;
+  sectionIndex: number | null;
+  prompt: string;
+  output: string;
+  startedAt: string;
+  completedAt: string | null;
+  error: string | null;
+};
+
+export type RunPlanResponse = {
+  run: RunRecord;
+  branches: RunPlanBranch[];
+  error?: string;
+};
+
 export type ThreadDetail = {
   thread: ThreadSummary;
   messages: Message[];
@@ -48,6 +69,12 @@ export type BootstrapState = {
   archivedThreads: ThreadSummary[];
   settings: Settings;
   selectedThreadId: string | null;
+};
+
+export type ModelsResponse = {
+  models: string[];
+  cachedAt: number;
+  error?: string;
 };
 
 export type SectionPlan = {

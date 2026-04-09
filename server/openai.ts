@@ -3,6 +3,12 @@ export type ChatMessage = {
   content: string;
 };
 
+export type OpenAIModel = {
+  id: string;
+  created: number;
+  owned_by: string;
+};
+
 type BaseCompletionInput = {
   apiKey: string;
   model: string;
@@ -54,6 +60,25 @@ export async function completeChat(input: BaseCompletionInput) {
 
   const payload = (await response.json()) as ResponsePayload;
   return extractOutputText(payload);
+}
+
+export async function listModels(input: { apiKey: string; signal?: AbortSignal }) {
+  const response = await fetch("https://api.openai.com/v1/models", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`
+    },
+    signal: input.signal
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const payload = (await response.json()) as {
+    data?: OpenAIModel[];
+  };
+  return payload.data ?? [];
 }
 
 export async function streamChat(
