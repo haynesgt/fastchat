@@ -162,28 +162,38 @@ async function runStagedMode(input: RunInput & { runId: string; writer: StreamWr
   const introPrompt = `${presetGuidance(input.settings.preset)}
 Write only a short introduction for the requested piece.
 Aim for a brief opening that sets direction quickly and hands off to the planned sections.
-If the response needs substantial framing, background, context, or setup, keep the intro short and push that material into one of the planned sections instead.
+Assume the main response will be carried by multiple longer sections written in parallel.
+If the response needs substantial framing, background, context, or setup, keep the intro very short and push that material into one of the planned sections instead.
+Prefer leaving useful substance for the planned sections so more of the answer can be developed in parallel.
 Do not mention stages, sections, or planning.
+Longer planned sections will be written in parallel in separate prompts.
 
 User request:
 ${input.prompt}`;
   const introBranchId = announceBranch(input, "stage_1", "intro", introPrompt, "Intro draft");
 
   const planVariantA = `${presetGuidance(input.settings.preset)}
-Plan 3 to 5 sections for the piece.
-If the response needs substantial framing, background, or setup, include a section for that work instead of front-loading it into the introduction.
+Plan 5 to 10 sections for the piece when the request supports a substantial response.
+Be eager to break the work into many distinct sections so more of the answer can be written in parallel.
+Favor a long, comprehensive response with enough sections to cover the topic from multiple useful angles.
+If the request is very simple or conversational, you may return NONE instead of forcing sections.
+If the response needs substantial framing, background, or setup, include a dedicated section for that work instead of front-loading it into the introduction.
 Output one section per line in this exact format:
 TITLE::BRIEF
 Do not add numbering, bullets, commentary, markdown fences, or any extra lines.
-Focus on clarity and logical flow.
+Make section titles specific and briefs substantial enough to support detailed drafting.
+Focus on clarity, logical flow, and strong coverage.
 
 User request:
 ${input.prompt}`;
   const planVariantB = `${presetGuidance(input.settings.preset)}
-Return JSON only. Create a concise JSON array of 3 to 5 sections.
+Return JSON only. Create a JSON array of 5 to 10 sections when the request supports a substantial response.
 Each item must contain title and brief.
+Be eager to split the work into many distinct sections so more of the answer can be written in parallel.
+Favor a long, comprehensive response with enough sections to cover the topic from multiple useful angles.
+If the request is very simple or conversational, return [] instead of forcing sections.
 If the response needs substantial framing, background, or setup, include a section for that work instead of front-loading it into the introduction.
-Focus on momentum, contrast, and strong reader progression.
+Focus on momentum, contrast, strong reader progression, and meaningful scope.
 
 User request:
 ${input.prompt}`;
@@ -267,6 +277,8 @@ Follow this section brief: ${section.brief}
 Keep the section self-contained and do not write the introduction or conclusion.
 Do not repeat the section title, heading, number, or label in the output.
 Start immediately with the section body content.
+Write a substantial, information-dense section with real depth, examples, explanation, and useful detail.
+Assume sibling sections are being written in parallel, so cover this section thoroughly without waiting on the introduction or conclusion to carry important content.
 
 Full section plan:
 ${sections.map((entry, itemIndex) => `${itemIndex + 1}. ${entry.title}: ${entry.brief}`).join("\n")}
@@ -517,7 +529,7 @@ function consolidateSections(input: Array<{ title: string; brief: string }>) {
     sections.push(section);
   }
 
-  return sections.slice(0, 5);
+  return sections.slice(0, 10);
 }
 
 async function chooseResponseMode(input: RunInput) {
@@ -534,8 +546,10 @@ Return exactly one token: STAGED or CHAT.
 Choose CHAT when the user message is ordinary conversation, acknowledgement, greeting, quick follow-up,
 brief clarification, or a short request that does not benefit from an intro, planned sections, and a conclusion.
 
-Choose STAGED only when the request clearly benefits from structured long-form writing with an introduction,
-section planning, section-by-section drafting, and a closing conclusion.`
+Choose STAGED whenever the request would benefit from a structured, longer, more comprehensive response,
+especially if it can be broken into multiple sections that can be drafted in parallel.
+When in doubt for substantive writing requests, prefer STAGED.
+Choose CHAT only for clearly conversational or lightweight requests that do not need structured long-form writing.`
       },
       {
         role: "user",
