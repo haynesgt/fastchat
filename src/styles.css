@@ -274,6 +274,7 @@ p {
   padding: 18px 20px;
   border-radius: 26px;
   border: 1px solid var(--line);
+  position: relative;
 }
 
 .message.user {
@@ -293,6 +294,10 @@ p {
   margin-bottom: 10px;
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+.message-meta span {
+  display: block;
 }
 
 .composer {
@@ -551,5 +556,36 @@ p {
   .sidebar-top {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (min-width: 1100px) {
+  .message-stream {
+    padding-left: 108px;
+    padding-right: 108px;
+  }
+
+  .message.user {
+    margin-right: 0;
+  }
+
+  .message-meta {
+    position: absolute;
+    top: 18px;
+    width: 88px;
+    margin: 0;
+    display: grid;
+    gap: 4px;
+    text-align: right;
+    line-height: 1.2;
+  }
+
+  .message.assistant .message-meta {
+    left: -100px;
+  }
+
+  .message.user .message-meta {
+    right: -100px;
+    left: auto;
   }
 }
