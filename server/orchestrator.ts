@@ -39,6 +39,8 @@ export async function runConversation(input: RunInput, writer: StreamWriter) {
     throw new Error("Add an OpenAI API key in settings before chatting.");
   }
 
+  const effectiveMode = input.mode === "staged" ? await chooseResponseMode(input) : input.mode;
+
   const userMessage = createMessage({
     threadId: input.threadId,
     role: "user",
@@ -46,11 +48,11 @@ export async function runConversation(input: RunInput, writer: StreamWriter) {
     content: input.prompt
   });
 
-  const runId = createRun({ threadId: input.threadId, mode: input.mode, userMessageId: userMessage.id });
-  writer.send({ type: "run_started", runId, threadId: input.threadId, mode: input.mode });
+  const runId = createRun({ threadId: input.threadId, mode: effectiveMode, userMessageId: userMessage.id });
+  writer.send({ type: "run_started", runId, threadId: input.threadId, mode: effectiveMode });
 
   try {
-    if (input.mode === "chat") {
+    if (effectiveMode === "chat") {
       await runChatMode({ ...input, runId, writer });
     } else {
       await runStagedMode({ ...input, runId, writer });
@@ -158,9 +160,7 @@ async function runStagedMode(input: RunInput & { runId: string; writer: StreamWr
   emitLifecycle(input, "stage_started", { stage: "stage_1", label: "Stage 1: Intro + plan" });
 
   const introPrompt = `${presetGuidance(input.settings.preset)}
-If the user request is simple conversational chat, acknowledgements, greetings, or does not benefit from structured sections,
-write the complete final reply instead of an introduction.
-Otherwise write only the introduction for the requested piece. Keep it engaging, purposeful, and ready to flow into planned sections.
+Write only the introduction for the requested piece. Keep it engaging, purposeful, and ready to flow into planned sections.
 Do not mention stages, sections, or planning.
 
 User request:
@@ -168,10 +168,7 @@ ${input.prompt}`;
   const introBranchId = announceBranch(input, "stage_1", "intro", introPrompt, "Intro draft");
 
   const planVariantA = `${presetGuidance(input.settings.preset)}
-Decide whether the request needs structured sections.
-If the best response is a short direct reply, output exactly:
-NONE
-Otherwise plan 3 to 5 sections for the piece.
+Plan 3 to 5 sections for the piece.
 Output one section per line in this exact format:
 TITLE::BRIEF
 Do not add numbering, bullets, commentary, markdown fences, or any extra lines.
@@ -180,9 +177,7 @@ Focus on clarity and logical flow.
 User request:
 ${input.prompt}`;
   const planVariantB = `${presetGuidance(input.settings.preset)}
-Return JSON only.
-If the best response is a short direct reply that does not need sections, return [].
-Otherwise create a concise JSON array of 3 to 5 sections.
+Return JSON only. Create a concise JSON array of 3 to 5 sections.
 Each item must contain title and brief.
 Focus on momentum, contrast, and strong reader progression.
 
@@ -253,33 +248,6 @@ ${input.prompt}`;
   ]);
   input.writer.send({ type: "section_plan", runId: input.runId, sections });
   emitLifecycle(input, "stage_completed", { stage: "stage_1" });
-
-  if (sections.length === 0) {
-    const assistantMessage = createMessage({
-      threadId: input.threadId,
-      runId: input.runId,
-      role: "assistant",
-      messageType: "assistant",
-      content: introText
-    });
-
-    updateRun(input.runId, {
-      status: "completed",
-      stage: "completed",
-      assembledOutput: introText,
-      assistantMessageId: assistantMessage.id
-    });
-
-    input.writer.send({
-      type: "run_completed",
-      runId: input.runId,
-      threadId: input.threadId,
-      messageId: assistantMessage.id,
-      content: introText
-    });
-    input.writer.close();
-    return;
-  }
 
   updateRun(input.runId, { stage: "stage_2", assembledOutput: introText });
   emitLifecycle(input, "stage_started", { stage: "stage_2", label: "Stage 2: Parallel sections" });
@@ -480,7 +448,7 @@ function parseSections(raw: string) {
 
 function parseLineSections(raw: string) {
   const trimmed = raw.trim();
-  if (!trimmed || trimmed === "NONE") {
+  if (!trimmed) {
     return [];
   }
 
@@ -544,4 +512,31 @@ function consolidateSections(input: Array<{ title: string; brief: string }>) {
   }
 
   return sections.slice(0, 5);
+}
+
+async function chooseResponseMode(input: RunInput) {
+  const decision = await completeChat({
+    apiKey: input.settings.apiKey,
+    model: input.settings.model,
+    signal: input.signal,
+    messages: [
+      {
+        role: "system",
+        content: `Decide whether the user request should use a multi-stage writing workflow.
+Return exactly one token: STAGED or CHAT.
+
+Choose CHAT when the user message is ordinary conversation, acknowledgement, greeting, quick follow-up,
+brief clarification, or a short request that does not benefit from an intro, planned sections, and a conclusion.
+
+Choose STAGED only when the request clearly benefits from structured long-form writing with an introduction,
+section planning, section-by-section drafting, and a closing conclusion.`
+      },
+      {
+        role: "user",
+        content: input.prompt
+      }
+    ]
+  });
+
+  return decision.trim().toUpperCase() === "STAGED" ? "staged" : "chat";
 }
