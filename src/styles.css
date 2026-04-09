@@ -55,8 +55,7 @@ pre {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
   height: 100vh;
-  gap: 18px;
-  padding: 18px;
+  gap: 0;
   overflow: hidden;
 }
 
@@ -64,9 +63,9 @@ pre {
 .chat-panel {
   backdrop-filter: blur(18px);
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  box-shadow: var(--shadow);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .sidebar {
@@ -76,10 +75,10 @@ pre {
   padding: 18px;
   min-height: 0;
   overflow: hidden;
+  border-right: 1px solid var(--line);
 }
 
 .sidebar-top,
-.chat-header,
 .composer-footer,
 .thread-card-header,
 .header-actions {
@@ -120,22 +119,23 @@ p {
   padding: 14px;
   border: 1px solid transparent;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.5);
+  background: transparent;
   text-align: left;
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  position: relative;
+  min-height: 74px;
+  padding-right: 108px;
 }
 
 .thread-card:hover,
 .thread-card.active {
   transform: translateY(-1px);
   border-color: rgba(212, 106, 47, 0.38);
-  background: rgba(255, 248, 237, 0.92);
+  background: rgba(255, 248, 237, 0.42);
 }
 
-.thread-card p,
 .thread-card span,
 .settings-panel label,
-.composer-footer p,
 .status-rail p {
   color: var(--muted);
 }
@@ -147,8 +147,50 @@ p {
   font-size: 0.85rem;
 }
 
-.thread-card-actions span {
-  text-decoration: underline;
+.thread-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.thread-card-header strong {
+  flex: 1;
+  min-width: 0;
+}
+
+.thread-date {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  white-space: nowrap;
+}
+
+.thread-card-footer {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+}
+
+.thread-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.thread-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(38, 23, 14, 0.06);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.thread-icon-button:hover {
+  background: rgba(212, 106, 47, 0.14);
 }
 
 .settings-button,
@@ -206,11 +248,15 @@ p {
 
 .chat-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: 16px;
-  padding: 18px;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 0;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.chat-title-block {
+  padding: 24px 18px 6px;
 }
 
 .message-stream {
@@ -218,7 +264,7 @@ p {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding-right: 6px;
+  padding: 0 18px 0 18px;
   min-height: 0;
   scrollbar-gutter: stable;
 }
@@ -238,6 +284,7 @@ p {
 .message.assistant {
   align-self: stretch;
   background: rgba(255, 255, 255, 0.76);
+  position: relative;
 }
 
 .message-meta {
@@ -249,18 +296,67 @@ p {
 }
 
 .composer {
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  padding: 14px;
-  background: rgba(255, 251, 244, 0.92);
-  box-shadow: 0 -10px 30px rgba(58, 33, 18, 0.06);
+  padding: 12px 18px 18px;
+  background: linear-gradient(180deg, rgba(245, 239, 227, 0) 0%, rgba(245, 239, 227, 0.92) 18%, rgba(245, 239, 227, 1) 100%);
+}
+
+.composer-field {
+  position: relative;
 }
 
 .composer textarea {
-  border: none;
   resize: vertical;
   min-height: 120px;
+  padding: 18px 216px 18px 18px;
+  background: rgba(255, 251, 244, 0.96);
+}
+
+.composer .primary-button {
+  position: absolute;
+  right: 86px;
+  bottom: 12px;
+}
+
+.composer-menu {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+}
+
+.composer-menu-button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: rgba(38, 23, 14, 0.08);
+  color: var(--ink);
+}
+
+.composer-menu-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 251, 244, 0.98);
+  box-shadow: 0 20px 40px rgba(58, 33, 18, 0.12);
+}
+
+.composer-menu-item {
+  border: none;
+  border-radius: 14px;
+  padding: 10px 12px;
+  text-align: left;
   background: transparent;
+  color: var(--ink);
+}
+
+.composer-menu-item.active {
+  background: linear-gradient(135deg, var(--accent), #ff9d63);
+  color: #fff7f1;
 }
 
 .composer textarea:focus,
@@ -288,6 +384,17 @@ p {
   border-radius: 999px;
   background: rgba(38, 23, 14, 0.06);
   width: fit-content;
+}
+
+.inline-stop-button {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(38, 23, 14, 0.08);
+  color: #8f2d12;
 }
 
 .status-dot {
@@ -440,7 +547,6 @@ p {
     height: 100vh;
   }
 
-  .chat-header,
   .header-actions,
   .sidebar-top {
     align-items: flex-start;

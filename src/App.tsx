@@ -32,6 +32,7 @@ export function App() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showComposerMenu, setShowComposerMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const messageStreamRef = useRef<HTMLElement | null>(null);
@@ -265,19 +266,6 @@ export function App() {
     await streamRun("/api/runs", { threadId, prompt, mode });
   }
 
-  async function regenerateLast() {
-    if (!selectedThread || isSending) {
-      return;
-    }
-
-    const lastRun = [...selectedThread.runs].reverse().find((run) => run.status !== "cancelled");
-    if (!lastRun) {
-      return;
-    }
-
-    await streamRun(`/api/runs/${lastRun.id}/retry`, {});
-  }
-
   async function stopRun() {
     if (!pending) {
       return;
@@ -480,10 +468,6 @@ export function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-top">
-          <div>
-            <p className="eyebrow">FastChat</p>
-            <h1>Staged ChatGPT</h1>
-          </div>
           <button className="ghost-button" onClick={() => void createThread()}>
             New thread
           </button>
@@ -501,32 +485,33 @@ export function App() {
             >
               <div className="thread-card-header">
                 <strong>{thread.title}</strong>
-                <span>{new Date(thread.updatedAt).toLocaleDateString()}</span>
+                <span className="thread-date">{new Date(thread.updatedAt).toLocaleDateString()}</span>
               </div>
-              <p>{thread.lastPreview || "Fresh thread"}</p>
-              <div className="thread-card-actions">
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void renameThread(thread.id);
-                  }}
-                  onKeyDown={() => undefined}
-                >
-                  Rename
-                </span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void archiveThread(thread.id);
-                  }}
-                  onKeyDown={() => undefined}
-                >
-                  Archive
-                </span>
+              <div className="thread-card-footer">
+                <div className="thread-card-actions">
+                  <button
+                    aria-label="Rename thread"
+                    className="thread-icon-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void renameThread(thread.id);
+                    }}
+                    type="button"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    aria-label="Archive thread"
+                    className="thread-icon-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void archiveThread(thread.id);
+                    }}
+                    type="button"
+                  >
+                    🗄️
+                  </button>
+                </div>
               </div>
             </button>
           ))}
@@ -592,27 +577,6 @@ export function App() {
       </aside>
 
       <main className="chat-panel">
-        <header className="chat-header">
-          <div>
-            <p className="eyebrow">Signature workflow</p>
-            <h2>{selectedThread?.thread.title ?? "Create a thread to start"}</h2>
-          </div>
-          <div className="header-actions">
-            <button className={`mode-pill ${mode === "staged" ? "active" : ""}`} onClick={() => setMode("staged")}>
-              Staged writer
-            </button>
-            <button className={`mode-pill ${mode === "chat" ? "active" : ""}`} onClick={() => setMode("chat")}>
-              Normal chat
-            </button>
-            <button className="ghost-button" disabled={isSending} onClick={() => void regenerateLast()}>
-              Regenerate
-            </button>
-            <button className="ghost-button warn" disabled={!pending} onClick={() => void stopRun()}>
-              Stop
-            </button>
-          </div>
-        </header>
-
         <section
           className="message-stream"
           ref={messageStreamRef}
@@ -625,6 +589,10 @@ export function App() {
             activeScrollThreadRef.current = selectedThreadId;
           }}
         >
+          <div className="chat-title-block">
+            <h2>{selectedThread?.thread.title ?? "Create a thread to start"}</h2>
+          </div>
+
           {renderedMessages.length === 0 ? (
             <div className="empty-state">
               <p className="eyebrow">Fast by design</p>
@@ -642,6 +610,11 @@ export function App() {
                 <span>{message.role === "assistant" ? "Assistant" : "You"}</span>
                 <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
               </div>
+              {message.id === pendingMessageId && pending ? (
+                <button className="inline-stop-button" onClick={() => void stopRun()}>
+                  Stop
+                </button>
+              ) : null}
               {message.role === "assistant" ? (
                 <div
                   className="markdown-body"
@@ -664,27 +637,60 @@ export function App() {
         </section>
 
         <form className="composer" onSubmit={(event) => void handleSend(event)}>
-          <textarea
-            placeholder="Write the thing you want drafted..."
-            value={composer}
-            onChange={(event) => setComposer(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && event.ctrlKey && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            rows={5}
-          />
-          <div className="composer-footer">
-            <p>
-              {mode === "staged"
-                ? "Default mode: intro, section plan, parallel section writing, summary."
-                : "Normal chat mode for quick back-and-forth answers."}
-            </p>
+          <div className="composer-field">
+            <textarea
+              placeholder="Write the thing you want drafted..."
+              value={composer}
+              onChange={(event) => setComposer(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && event.ctrlKey && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              rows={5}
+            />
             <button className="primary-button" disabled={isSending || !composer.trim()} type="submit">
               {isSending ? "Streaming..." : "Send"}
             </button>
+            <div className="composer-menu">
+              <button
+                aria-expanded={showComposerMenu}
+                aria-haspopup="menu"
+                className="composer-menu-button"
+                onClick={() => setShowComposerMenu((value) => !value)}
+                type="button"
+              >
+                Mode
+              </button>
+
+              {showComposerMenu ? (
+                <div className="composer-menu-popover" role="menu">
+                  <button
+                    className={`composer-menu-item ${mode === "staged" ? "active" : ""}`}
+                    onClick={() => {
+                      setMode("staged");
+                      setShowComposerMenu(false);
+                    }}
+                    role="menuitemradio"
+                    type="button"
+                  >
+                    Staged writer
+                  </button>
+                  <button
+                    className={`composer-menu-item ${mode === "chat" ? "active" : ""}`}
+                    onClick={() => {
+                      setMode("chat");
+                      setShowComposerMenu(false);
+                    }}
+                    role="menuitemradio"
+                    type="button"
+                  >
+                    Normal chat
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </form>
 
