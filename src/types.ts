@@ -43,7 +43,8 @@ export type ThreadDetail = {
 };
 
 export type BootstrapState = {
-  threads: ThreadSummary[];
+  activeThreads: ThreadSummary[];
+  archivedThreads: ThreadSummary[];
   settings: Settings;
   selectedThreadId: string | null;
 };

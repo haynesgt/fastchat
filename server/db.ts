@@ -128,12 +128,12 @@ export function getThread(threadId: string) {
   return db.prepare<unknown[], DbThread>(`SELECT * FROM threads WHERE id = ?`).get(threadId);
 }
 
-export function listThreads() {
+export function listThreads(archived = false) {
   return db
     .prepare<unknown[], DbThread>(
-      `SELECT * FROM threads WHERE archived = 0 ORDER BY updated_at DESC, created_at DESC`
+      `SELECT * FROM threads WHERE archived = ? ORDER BY updated_at DESC, created_at DESC`
     )
-    .all();
+    .all(archived ? 1 : 0);
 }
 
 export function updateThreadTitle(threadId: string, title: string) {

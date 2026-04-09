@@ -22,7 +22,9 @@ const pendingMessageId = "__pending__";
 const scrollStorageKey = "fastchat.threadScroll";
 
 export function App() {
-  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [activeThreads, setActiveThreads] = useState<ThreadSummary[]>([]);
+  const [archivedThreads, setArchivedThreads] = useState<ThreadSummary[]>([]);
+  const [threadTab, setThreadTab] = useState<"active" | "archived">("active");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(() => readThreadIdFromLocation());
   const [threadDetails, setThreadDetails] = useState<Record<string, ThreadDetail>>({});
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -64,6 +66,7 @@ export function App() {
   }, [selectedThreadId, threadDetails]);
 
   const selectedThread = selectedThreadId ? threadDetails[selectedThreadId] : null;
+  const visibleThreads = threadTab === "active" ? activeThreads : archivedThreads;
 
   useEffect(() => {
     restoredScrollThreadRef.current = null;
@@ -137,9 +140,10 @@ export function App() {
   async function loadBootstrap() {
     const response = await fetch("/api/bootstrap");
     const data = (await response.json()) as BootstrapState;
-    setThreads(data.threads);
+    setActiveThreads(data.activeThreads);
+    setArchivedThreads(data.archivedThreads);
     setSettings(data.settings);
-    setSelectedThreadId((current) => current ?? data.selectedThreadId ?? data.threads[0]?.id ?? null);
+    setSelectedThreadId((current) => current ?? data.selectedThreadId ?? data.activeThreads[0]?.id ?? null);
   }
 
   async function loadThread(threadId: string) {
@@ -164,17 +168,18 @@ export function App() {
       body: JSON.stringify({})
     });
     const thread = (await response.json()) as ThreadSummary;
-    setThreads((current) => [thread, ...current]);
+    setActiveThreads((current) => [thread, ...current]);
     setThreadDetails((current) => ({
       ...current,
       [thread.id]: { thread, messages: [], runs: [] }
     }));
+    setThreadTab("active");
     selectThread(thread.id);
     return thread.id;
   }
 
   async function renameThread(threadId: string) {
-    const current = threads.find((thread) => thread.id === threadId);
+    const current = [...activeThreads, ...archivedThreads].find((thread) => thread.id === threadId);
     const title = window.prompt("Rename thread", current?.title ?? "");
     if (!title) {
       return;
@@ -187,7 +192,8 @@ export function App() {
     });
 
     const updated = (await response.json()) as ThreadSummary;
-    setThreads((currentThreads) => currentThreads.map((thread) => (thread.id === threadId ? updated : thread)));
+    setActiveThreads((currentThreads) => currentThreads.map((thread) => (thread.id === threadId ? updated : thread)));
+    setArchivedThreads((currentThreads) => currentThreads.map((thread) => (thread.id === threadId ? updated : thread)));
     setThreadDetails((currentDetails) => {
       const detail = currentDetails[threadId];
       if (!detail) {
@@ -200,7 +206,11 @@ export function App() {
 
   async function archiveThread(threadId: string) {
     await fetch(`/api/threads/${threadId}`, { method: "DELETE" });
-    setThreads((current) => current.filter((thread) => thread.id !== threadId));
+    const archivedThread = activeThreads.find((thread) => thread.id === threadId);
+    setActiveThreads((current) => current.filter((thread) => thread.id !== threadId));
+    if (archivedThread) {
+      setArchivedThreads((current) => [{ ...archivedThread, archived: true }, ...current]);
+    }
     setThreadDetails((current) => {
       const next = { ...current };
       delete next[threadId];
@@ -474,7 +484,24 @@ export function App() {
         </div>
 
         <div className="thread-list">
-          {threads.map((thread) => (
+          <div className="thread-tabs">
+            <button
+              className={`thread-tab ${threadTab === "active" ? "active" : ""}`}
+              onClick={() => setThreadTab("active")}
+              type="button"
+            >
+              Chats
+            </button>
+            <button
+              className={`thread-tab ${threadTab === "archived" ? "active" : ""}`}
+              onClick={() => setThreadTab("archived")}
+              type="button"
+            >
+              Archived
+            </button>
+          </div>
+
+          {visibleThreads.map((thread) => (
             <button
               key={thread.id}
               className={`thread-card ${thread.id === selectedThreadId ? "active" : ""}`}
@@ -515,6 +542,10 @@ export function App() {
               </div>
             </button>
           ))}
+
+          {visibleThreads.length === 0 ? (
+            <p className="thread-empty">{threadTab === "archived" ? "No archived chats yet." : "No chats yet."}</p>
+          ) : null}
         </div>
 
         <button className="settings-button" onClick={() => setShowSettings((value) => !value)}>

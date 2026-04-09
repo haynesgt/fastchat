@@ -37,11 +37,13 @@ const runSchema = z.object({
 app.get("/api/health", async () => ({ ok: true }));
 
 app.get("/api/bootstrap", async () => {
-  const threads = listThreads().map(mapThread);
+  const activeThreads = listThreads(false).map(mapThread);
+  const archivedThreads = listThreads(true).map(mapThread);
   return {
-    threads,
+    activeThreads,
+    archivedThreads,
     settings: mapSettings(getSettings()),
-    selectedThreadId: threads[0]?.id ?? null
+    selectedThreadId: activeThreads[0]?.id ?? null
   };
 });
 
