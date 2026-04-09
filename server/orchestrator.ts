@@ -32,7 +32,7 @@ type RunInput = {
   signal: AbortSignal;
 };
 
-const sectionLimiter = pLimit(3);
+const sectionLimiter = pLimit(20);
 
 export async function runConversation(input: RunInput, writer: StreamWriter) {
   if (!input.settings.apiKey.trim()) {
@@ -160,7 +160,9 @@ async function runStagedMode(input: RunInput & { runId: string; writer: StreamWr
   emitLifecycle(input, "stage_started", { stage: "stage_1", label: "Stage 1: Intro + plan" });
 
   const introPrompt = `${presetGuidance(input.settings.preset)}
-Write only the introduction for the requested piece. Keep it engaging, purposeful, and ready to flow into planned sections.
+Write only a short introduction for the requested piece.
+Aim for a brief opening that sets direction quickly and hands off to the planned sections.
+If the response needs substantial framing, background, context, or setup, keep the intro short and push that material into one of the planned sections instead.
 Do not mention stages, sections, or planning.
 
 User request:
@@ -169,6 +171,7 @@ ${input.prompt}`;
 
   const planVariantA = `${presetGuidance(input.settings.preset)}
 Plan 3 to 5 sections for the piece.
+If the response needs substantial framing, background, or setup, include a section for that work instead of front-loading it into the introduction.
 Output one section per line in this exact format:
 TITLE::BRIEF
 Do not add numbering, bullets, commentary, markdown fences, or any extra lines.
@@ -179,6 +182,7 @@ ${input.prompt}`;
   const planVariantB = `${presetGuidance(input.settings.preset)}
 Return JSON only. Create a concise JSON array of 3 to 5 sections.
 Each item must contain title and brief.
+If the response needs substantial framing, background, or setup, include a section for that work instead of front-loading it into the introduction.
 Focus on momentum, contrast, and strong reader progression.
 
 User request:
