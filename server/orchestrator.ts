@@ -189,7 +189,9 @@ If the response needs substantial framing, background, or setup, include a dedic
 Output one section per line in this exact format:
 TITLE::BRIEF
 Do not add numbering, bullets, commentary, markdown fences, or any extra lines.
-Make section titles specific and briefs substantial enough to support detailed drafting.
+Make section titles specific.
+Keep each brief extremely short so planning finishes quickly: prefer one short sentence or compact phrase, usually under 12 words.
+Let the section writer infer most detail from the intro, user request, and full section plan.
 Focus on clarity, logical flow, and strong coverage.
 
 User request:
@@ -201,6 +203,8 @@ Be eager to split the work into many distinct sections so more of the answer can
 Favor a long, comprehensive response with enough sections to cover the topic from multiple useful angles.
 If the request is very simple or conversational, return [] instead of forcing sections.
 If the response needs substantial framing, background, or setup, include a section for that work instead of front-loading it into the introduction.
+Keep each brief extremely short so planning finishes quickly: prefer one short sentence or compact phrase, usually under 12 words.
+Let the section writer infer most detail from the intro, user request, and full section plan.
 Focus on momentum, contrast, strong reader progression, and meaningful scope.
 
 User request:
@@ -281,12 +285,16 @@ ${input.prompt}`;
       sectionLimiter(async () => {
         const sectionPrompt = `${presetGuidance(input.settings.preset)}
 Write section ${index + 1} titled "${section.title}".
-Follow this section brief: ${section.brief}
+Section brief: ${section.brief}
+Use this already-written intro for context:
+${introText}
+
 Keep the section self-contained and do not write the introduction or conclusion.
 Do not repeat the section title, heading, number, or label in the output.
 Start immediately with the section body content.
 Write a substantial, information-dense section with real depth, examples, explanation, and useful detail.
 Assume sibling sections are being written in parallel, so cover this section thoroughly without waiting on the introduction or conclusion to carry important content.
+Do not restate the overall assignment before writing the section body.
 
 Full section plan:
 ${sections.map((entry, itemIndex) => `${itemIndex + 1}. ${entry.title}: ${entry.brief}`).join("\n")}
