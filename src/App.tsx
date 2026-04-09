@@ -23,7 +23,7 @@ const scrollStorageKey = "fastchat.threadScroll";
 
 export function App() {
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(() => readThreadIdFromLocation());
   const [threadDetails, setThreadDetails] = useState<Record<string, ThreadDetail>>({});
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [composer, setComposer] = useState("");
@@ -43,6 +43,15 @@ export function App() {
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setSelectedThreadId(readThreadIdFromLocation());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   useEffect(() => {
@@ -134,6 +143,13 @@ export function App() {
 
   async function loadThread(threadId: string) {
     const response = await fetch(`/api/threads/${threadId}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        setSelectedThreadId(null);
+        setThreadUrl(null, false);
+      }
+      return;
+    }
     const detail = (await response.json()) as ThreadDetail;
     startTransition(() => {
       setThreadDetails((current) => ({ ...current, [threadId]: detail }));
@@ -152,7 +168,7 @@ export function App() {
       ...current,
       [thread.id]: { thread, messages: [], runs: [] }
     }));
-    setSelectedThreadId(thread.id);
+    selectThread(thread.id);
     return thread.id;
   }
 
@@ -190,7 +206,7 @@ export function App() {
       return next;
     });
     if (selectedThreadId === threadId) {
-      setSelectedThreadId(null);
+      selectThread(null);
     }
   }
 
@@ -425,6 +441,11 @@ export function App() {
     await Promise.all([loadBootstrap(), loadThread(selectedThreadId)]);
   }
 
+  function selectThread(threadId: string | null) {
+    setSelectedThreadId(threadId);
+    setThreadUrl(threadId, true);
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -445,7 +466,7 @@ export function App() {
               className={`thread-card ${thread.id === selectedThreadId ? "active" : ""}`}
               onClick={() => {
                 persistCurrentScroll(activeScrollThreadRef.current, messageStreamRef.current);
-                setSelectedThreadId(thread.id);
+                selectThread(thread.id);
               }}
             >
               <div className="thread-card-header">
@@ -678,4 +699,20 @@ function persistCurrentScroll(threadId: string | null, container: HTMLElement | 
   }
 
   writeThreadScroll(threadId, container.scrollTop);
+}
+
+function readThreadIdFromLocation() {
+  const match = window.location.pathname.match(/^\/thread\/([0-9a-f-]+)$/i);
+  return match?.[1] ?? null;
+}
+
+function setThreadUrl(threadId: string | null, push: boolean) {
+  const nextPath = threadId ? `/thread/${threadId}` : "/";
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (currentPath === nextPath) {
+    return;
+  }
+
+  const method = push ? "pushState" : "replaceState";
+  window.history[method](null, "", nextPath);
 }
