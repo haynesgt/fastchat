@@ -136,6 +136,7 @@ export function App() {
           ]
             .filter(Boolean)
             .join("\n\n");
+    const visiblePreview = stagedPreview.trim() || `_${pending.statusLabel}..._`;
 
     const optimisticAssistant: Message = {
       id: pendingMessageId,
@@ -143,7 +144,7 @@ export function App() {
       runId: pending.runId,
       role: "assistant",
       messageType: "assistant",
-      content: stagedPreview,
+      content: visiblePreview,
       createdAt: new Date().toISOString()
     };
 
@@ -286,6 +287,17 @@ export function App() {
       };
     });
 
+    setPending({
+      runId: `local-${crypto.randomUUID()}`,
+      threadId,
+      mode,
+      intro: "",
+      summary: "",
+      sections: [],
+      sectionContents: {},
+      statusLabel: "Starting"
+    });
+
     await streamRun("/api/runs", { threadId, prompt, mode });
   }
 
@@ -354,16 +366,20 @@ export function App() {
 
   function applyStreamEvent(event: StreamEvent) {
     if (event.type === "run_started") {
-      setPending({
-        runId: event.runId,
-        threadId: event.threadId,
-        mode: event.mode,
-        intro: "",
-        summary: "",
-        sections: [],
-        sectionContents: {},
-        statusLabel: "Starting"
-      });
+      setPending((current) =>
+        current && current.threadId === event.threadId
+          ? { ...current, runId: event.runId, mode: event.mode, statusLabel: current.statusLabel || "Starting" }
+          : {
+              runId: event.runId,
+              threadId: event.threadId,
+              mode: event.mode,
+              intro: "",
+              summary: "",
+              sections: [],
+              sectionContents: {},
+              statusLabel: "Starting"
+            }
+      );
       return;
     }
 
