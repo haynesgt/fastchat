@@ -164,7 +164,7 @@ export function createMessage(input: {
     `INSERT INTO messages (id, thread_id, run_id, role, message_type, content, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(id, input.threadId, input.runId ?? null, input.role, input.messageType, input.content, createdAt);
-  syncThreadPreview(input.threadId, input.content);
+  syncThreadMetadata(input.threadId, input);
   return db.prepare<unknown[], DbMessage>(`SELECT * FROM messages WHERE id = ?`).get(id)!;
 }
 
@@ -304,7 +304,38 @@ export function getThreadDetail(threadId: string) {
   };
 }
 
-function syncThreadPreview(threadId: string, content: string) {
-  const preview = content.replace(/\s+/g, " ").trim().slice(0, 180);
-  db.prepare(`UPDATE threads SET updated_at = ?, last_preview = ? WHERE id = ?`).run(nowIso(), preview, threadId);
+function syncThreadMetadata(
+  threadId: string,
+  message: { role: "user" | "assistant"; messageType: "user" | "assistant" | "run_event"; content: string }
+) {
+  const timestamp = nowIso();
+
+  if (message.messageType === "run_event") {
+    db.prepare(`UPDATE threads SET updated_at = ? WHERE id = ?`).run(timestamp, threadId);
+    return;
+  }
+
+  const preview = toSingleLinePreview(message.content);
+  const thread = getThread(threadId);
+  const nextTitle =
+    thread && thread.title === "Untitled thread" && message.role === "user"
+      ? preview.slice(0, 60) || thread.title
+      : thread?.title ?? "Untitled thread";
+
+  db.prepare(`UPDATE threads SET updated_at = ?, last_preview = ?, title = ? WHERE id = ?`).run(
+    timestamp,
+    preview,
+    nextTitle,
+    threadId
+  );
+}
+
+function toSingleLinePreview(content: string) {
+  return content
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[#>*_`-]+/g, " ")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
 }
