@@ -657,13 +657,22 @@ export function App() {
           </div>
 
           {visibleThreads.map((thread) => (
-            <button
+            <div
               key={thread.id}
               className={`thread-card ${thread.id === selectedThreadId ? "active" : ""}`}
               onClick={() => {
                 persistCurrentScroll(activeScrollThreadRef.current, messageStreamRef.current);
                 selectThread(thread.id);
               }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  persistCurrentScroll(activeScrollThreadRef.current, messageStreamRef.current);
+                  selectThread(thread.id);
+                }
+              }}
+              role="button"
+              tabIndex={0}
             >
               <div className="thread-card-header">
                 <strong>{thread.title}</strong>
@@ -695,7 +704,7 @@ export function App() {
                   </button>
                 </div>
               </div>
-            </button>
+            </div>
           ))}
 
           {visibleThreads.length === 0 ? (
