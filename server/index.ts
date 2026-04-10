@@ -6,7 +6,9 @@ import { z } from "zod";
 import {
   archiveThread,
   createThread,
+  getMessage,
   getSettings,
+  getThread,
   getThreadDetail,
   getRun,
   listThreads,
@@ -71,6 +73,26 @@ app.get("/api/threads/:threadId", async (request, reply) => {
     thread: mapThread(detail.thread),
     messages: detail.messages.map(mapMessage),
     runs: detail.runs.map(mapRun)
+  };
+});
+
+app.get("/api/messages/:messageId", async (request, reply) => {
+  const params = z.object({ messageId: z.string().uuid() }).parse(request.params);
+  const message = getMessage(params.messageId);
+  if (!message) {
+    reply.code(404);
+    return { error: "Message not found" };
+  }
+
+  const thread = getThread(message.thread_id);
+  if (!thread) {
+    reply.code(404);
+    return { error: "Thread not found" };
+  }
+
+  return {
+    thread: mapThread(thread),
+    message: mapMessage(message)
   };
 });
 

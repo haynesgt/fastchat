@@ -173,6 +173,10 @@ export function listMessages(threadId: string) {
     .all(threadId);
 }
 
+export function getMessage(messageId: string) {
+  return db.prepare<unknown[], DbMessage>(`SELECT * FROM messages WHERE id = ?`).get(messageId);
+}
+
 export function createMessage(input: {
   threadId: string;
   runId?: string | null;

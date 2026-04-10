@@ -3,6 +3,7 @@ import DOMPurify from "dompurify";
 import { marked } from "marked";
 import {
   BootstrapState,
+  MessageDetail,
   Message,
   ModelsResponse,
   PendingRunState,
@@ -25,11 +26,14 @@ const pendingMessageId = "__pending__";
 const scrollStorageKey = "fastchat.threadScroll";
 
 export function App() {
+  const initialRoute = readRouteFromLocation();
   const [activeThreads, setActiveThreads] = useState<ThreadSummary[]>([]);
   const [archivedThreads, setArchivedThreads] = useState<ThreadSummary[]>([]);
   const [threadTab, setThreadTab] = useState<"active" | "archived">("active");
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(() => readThreadIdFromLocation());
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(initialRoute.threadId);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(initialRoute.messageId);
   const [threadDetails, setThreadDetails] = useState<Record<string, ThreadDetail>>({});
+  const [messageDetails, setMessageDetails] = useState<Record<string, MessageDetail>>({});
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [composer, setComposer] = useState("");
   const [mode, setMode] = useState<"staged" | "chat">("staged");
@@ -74,8 +78,15 @@ export function App() {
   }, [settings.theme]);
 
   useEffect(() => {
+    document.body.classList.toggle("standalone-message-route", Boolean(selectedMessageId));
+    return () => document.body.classList.remove("standalone-message-route");
+  }, [selectedMessageId]);
+
+  useEffect(() => {
     const handlePopState = () => {
-      setSelectedThreadId(readThreadIdFromLocation());
+      const route = readRouteFromLocation();
+      setSelectedThreadId(route.threadId);
+      setSelectedMessageId(route.messageId);
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -90,12 +101,26 @@ export function App() {
     void loadThread(selectedThreadId);
   }, [selectedThreadId, threadDetails]);
 
+  useEffect(() => {
+    if (!selectedMessageId || messageDetails[selectedMessageId]) {
+      return;
+    }
+
+    void loadMessage(selectedMessageId);
+  }, [messageDetails, selectedMessageId]);
+
   const selectedThread = selectedThreadId ? threadDetails[selectedThreadId] : null;
+  const selectedMessageDetail = selectedMessageId ? messageDetails[selectedMessageId] : null;
+  const activeThreadId = selectedMessageDetail?.thread.id ?? selectedThreadId;
   const visibleThreads = threadTab === "active" ? activeThreads : archivedThreads;
 
   useEffect(() => {
+    if (selectedMessageId) {
+      return;
+    }
+
     restoredScrollThreadRef.current = null;
-  }, [selectedThreadId]);
+  }, [selectedMessageId, selectedThreadId]);
 
   useEffect(() => {
     if (!selectedThreadId || !selectedThread) {
@@ -181,7 +206,13 @@ export function App() {
     setActiveThreads(data.activeThreads);
     setArchivedThreads(data.archivedThreads);
     setSettings(data.settings);
-    setSelectedThreadId((current) => current ?? data.selectedThreadId ?? data.activeThreads[0]?.id ?? null);
+    setSelectedThreadId((current) => {
+      if (current || selectedMessageId) {
+        return current;
+      }
+
+      return data.selectedThreadId ?? data.activeThreads[0]?.id ?? null;
+    });
   }
 
   async function loadThread(threadId: string) {
@@ -196,6 +227,22 @@ export function App() {
     const detail = (await response.json()) as ThreadDetail;
     startTransition(() => {
       setThreadDetails((current) => ({ ...current, [threadId]: detail }));
+    });
+  }
+
+  async function loadMessage(messageId: string) {
+    const response = await fetch(`/api/messages/${messageId}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        setSelectedMessageId(null);
+        setAppUrl({ threadId: selectedThreadId, messageId: null }, false);
+      }
+      return;
+    }
+
+    const detail = (await response.json()) as MessageDetail;
+    startTransition(() => {
+      setMessageDetails((current) => ({ ...current, [messageId]: detail }));
     });
   }
 
@@ -616,6 +663,11 @@ export function App() {
   }
 
   async function refreshSelectedThread() {
+    if (selectedMessageId) {
+      await Promise.all([loadBootstrap(), loadMessage(selectedMessageId)]);
+      return;
+    }
+
     if (!selectedThreadId) {
       await loadBootstrap();
       return;
@@ -626,7 +678,119 @@ export function App() {
 
   function selectThread(threadId: string | null) {
     setSelectedThreadId(threadId);
-    setThreadUrl(threadId, true);
+    setSelectedMessageId(null);
+    setAppUrl({ threadId, messageId: null }, true);
+  }
+
+  function selectMessage(messageId: string, threadId: string) {
+    setSelectedThreadId(threadId);
+    setSelectedMessageId(messageId);
+    setAppUrl({ threadId, messageId }, true);
+  }
+
+  function renderMessageCard(message: Message) {
+    const standalone = Boolean(selectedMessageDetail);
+
+    return (
+      <article key={message.id} className={`message ${message.role} ${standalone ? "standalone-message-card" : ""}`}>
+        <div className="message-meta">
+          <span>{message.role === "assistant" ? "Assistant" : "You"}</span>
+          <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
+          <div className="message-meta-actions">
+            {message.id !== pendingMessageId && !selectedMessageDetail ? (
+              <a
+                className="message-meta-action message-meta-link"
+                href={getMessagePath(message.id)}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                View
+              </a>
+            ) : null}
+            {message.role === "assistant" && message.runId && message.id !== pendingMessageId ? (
+              <button
+                className="message-meta-action"
+                onClick={() => void toggleRunPlan(message.runId!)}
+                type="button"
+              >
+                Plan
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {message.id === pendingMessageId && pending ? (
+          <button className="inline-stop-button" onClick={() => void stopRun()}>
+            Stop
+          </button>
+        ) : null}
+        {message.role === "assistant" && message.runId && openPlanRunId === message.runId ? (
+          <div className="plan-popover">
+            <div className="plan-popover-header">
+              <strong>Execution plan</strong>
+              <button className="plan-close-button" onClick={() => setOpenPlanRunId(null)} type="button">
+                Close
+              </button>
+            </div>
+            {isLoadingPlanRunId === message.runId ? <p className="plan-loading">Loading plan...</p> : null}
+            {planErrorRunId === message.runId ? (
+              <p className="plan-loading">Unable to load the saved plan for this response.</p>
+            ) : null}
+            {planCache[message.runId] ? (
+              <div className="plan-stage-list">
+                {groupBranchesByStage(planCache[message.runId].branches).map(([stage, branches]) => (
+                  <section key={stage} className="plan-stage">
+                    <h4>{formatStageLabel(stage)}</h4>
+                    {branches.map((branch) => (
+                      <div key={branch.id} className="plan-branch">
+                        <div className="plan-branch-header">
+                          <strong>{branch.title || branch.branchKey}</strong>
+                          <span>{branch.status}</span>
+                        </div>
+                        <p>{toSingleLine(branch.prompt)}</p>
+                      </div>
+                    ))}
+                  </section>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {message.role === "assistant" ? (
+          renderAssistantBody({
+            message,
+            pending,
+            expandedMessages,
+            expandedSections,
+            standalone,
+            onToggleMessage: toggleMessageExpansion,
+            onToggleSection: toggleSectionExpansion
+          })
+        ) : (
+          <pre>{message.content}</pre>
+        )}
+      </article>
+    );
+  }
+
+  if (selectedMessageDetail) {
+    return (
+      <div className="standalone-message-page">
+        <main className="standalone-message-panel">
+          <section className="message-stream single-message-stream standalone-message-stream">
+            <div className="chat-title-block standalone-message-header">
+              <p className="eyebrow">Single message</p>
+              <div className="chat-title-row">
+                <h2>{selectedMessageDetail.thread.title}</h2>
+                <a className="ghost-button standalone-back-link" href={getThreadPath(selectedMessageDetail.thread.id)}>
+                  Back to thread
+                </a>
+              </div>
+            </div>
+            {renderMessageCard(selectedMessageDetail.message)}
+          </section>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -659,7 +823,7 @@ export function App() {
           {visibleThreads.map((thread) => (
             <div
               key={thread.id}
-              className={`thread-card ${thread.id === selectedThreadId ? "active" : ""}`}
+              className={`thread-card ${thread.id === activeThreadId ? "active" : ""}`}
               onClick={() => {
                 persistCurrentScroll(activeScrollThreadRef.current, messageStreamRef.current);
                 selectThread(thread.id);
@@ -840,72 +1004,7 @@ export function App() {
             </div>
           ) : null}
 
-          {renderedMessages.map((message) => (
-            <article key={message.id} className={`message ${message.role}`}>
-              <div className="message-meta">
-                <span>{message.role === "assistant" ? "Assistant" : "You"}</span>
-                <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
-                {message.role === "assistant" && message.runId && message.id !== pendingMessageId ? (
-                  <button
-                    className="message-meta-action"
-                    onClick={() => void toggleRunPlan(message.runId!)}
-                    type="button"
-                  >
-                    Plan
-                  </button>
-                ) : null}
-              </div>
-              {message.id === pendingMessageId && pending ? (
-                <button className="inline-stop-button" onClick={() => void stopRun()}>
-                  Stop
-                </button>
-              ) : null}
-              {message.role === "assistant" && message.runId && openPlanRunId === message.runId ? (
-                <div className="plan-popover">
-                  <div className="plan-popover-header">
-                    <strong>Execution plan</strong>
-                    <button className="plan-close-button" onClick={() => setOpenPlanRunId(null)} type="button">
-                      Close
-                    </button>
-                  </div>
-                  {isLoadingPlanRunId === message.runId ? <p className="plan-loading">Loading plan...</p> : null}
-                  {planErrorRunId === message.runId ? (
-                    <p className="plan-loading">Unable to load the saved plan for this response.</p>
-                  ) : null}
-                  {planCache[message.runId] ? (
-                    <div className="plan-stage-list">
-                      {groupBranchesByStage(planCache[message.runId].branches).map(([stage, branches]) => (
-                        <section key={stage} className="plan-stage">
-                          <h4>{formatStageLabel(stage)}</h4>
-                          {branches.map((branch) => (
-                            <div key={branch.id} className="plan-branch">
-                              <div className="plan-branch-header">
-                                <strong>{branch.title || branch.branchKey}</strong>
-                                <span>{branch.status}</span>
-                              </div>
-                              <p>{toSingleLine(branch.prompt)}</p>
-                            </div>
-                          ))}
-                        </section>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {message.role === "assistant" ? (
-                renderAssistantBody({
-                  message,
-                  pending,
-                  expandedMessages,
-                  expandedSections,
-                  onToggleMessage: toggleMessageExpansion,
-                  onToggleSection: toggleSectionExpansion
-                })
-              ) : (
-                <pre>{message.content}</pre>
-              )}
-            </article>
-          ))}
+          {renderedMessages.map(renderMessageCard)}
 
           {pending ? (
             <div className="status-rail">
@@ -990,10 +1089,12 @@ function renderAssistantBody(input: {
   pending: PendingRunState | null;
   expandedMessages: Record<string, boolean>;
   expandedSections: Record<string, boolean>;
+  standalone?: boolean;
   onToggleMessage: (messageId: string) => void;
   onToggleSection: (sectionKey: string) => void;
 }) {
-  const { message, pending, expandedMessages, expandedSections, onToggleMessage, onToggleSection } = input;
+  const { message, pending, expandedMessages, expandedSections, standalone = false, onToggleMessage, onToggleSection } =
+    input;
 
   if (message.id === pendingMessageId && pending?.mode === "staged") {
     const stack = (
@@ -1011,7 +1112,7 @@ function renderAssistantBody(input: {
         {pending.sections.map((section, index) => {
           const sectionKey = `${message.id}:section:${index}`;
           const content = pending.sectionContents[index]?.trim() || "_Writing this section..._";
-          return renderSectionCard(section.title, content, sectionKey, expandedSections, onToggleSection);
+          return renderSectionCard(section.title, content, sectionKey, expandedSections, onToggleSection, standalone);
         })}
         {pending.summary.trim() ? (
           <ScrollableBlock
@@ -1028,9 +1129,10 @@ function renderAssistantBody(input: {
 
     return (
       <MessageStackBlock
-        expanded={Boolean(expandedMessages[message.id])}
+        expanded={standalone || Boolean(expandedMessages[message.id])}
         hasSections={pending.sections.length > 0}
         onToggle={() => onToggleMessage(message.id)}
+        standalone={standalone}
       >
         {stack}
       </MessageStackBlock>
@@ -1059,7 +1161,8 @@ function renderAssistantBody(input: {
             section.content,
             `${message.id}:section:${index}`,
             expandedSections,
-            onToggleSection
+            onToggleSection,
+            standalone
           )
         )}
         {parsedSections.summary.trim() ? (
@@ -1079,9 +1182,10 @@ function renderAssistantBody(input: {
 
     return (
       <MessageStackBlock
-        expanded={Boolean(expandedMessages[message.id])}
+        expanded={standalone || Boolean(expandedMessages[message.id])}
         hasSections={parsedSections.sections.length > 0}
         onToggle={() => onToggleMessage(message.id)}
+        standalone={standalone}
       >
         {stack}
       </MessageStackBlock>
@@ -1095,11 +1199,11 @@ function renderAssistantBody(input: {
     <ScrollableBlock
       bodyClassName="markdown-body"
       content={renderMarkdown(message.content)}
-      expanded={expanded}
+      expanded={standalone || expanded}
       insetBody
       isHtml
       label={shouldClamp ? undefined : undefined}
-      onToggle={shouldClamp ? () => onToggleMessage(message.id) : undefined}
+      onToggle={standalone ? undefined : shouldClamp ? () => onToggleMessage(message.id) : undefined}
     />
   );
 }
@@ -1109,39 +1213,45 @@ function MessageStackBlock(input: {
   expanded: boolean;
   onToggle: () => void;
   hasSections?: boolean;
+  standalone?: boolean;
 }) {
-  const { children, expanded, onToggle, hasSections = true } = input;
+  const { children, expanded, onToggle, hasSections = true, standalone = false } = input;
   const stackScrollClassName = [
     "assistant-stack-scroll",
     expanded ? "expanded" : "collapsed",
-    hasSections ? "" : "no-sections"
+    hasSections ? "" : "no-sections",
+    standalone ? "standalone" : ""
   ]
     .filter(Boolean)
     .join(" ");
 
   return (
     <div className="assistant-message-stack">
-      <div className="assistant-block-controls">
-        <button
-          aria-label={expanded ? "Collapse message" : "Expand message"}
-          className="section-toggle-button assistant-block-toggle"
-          onClick={onToggle}
-          type="button"
-        >
-          {toggleSymbol(expanded)}
-        </button>
-      </div>
+      {!standalone ? (
+        <div className="assistant-block-controls">
+          <button
+            aria-label={expanded ? "Collapse message" : "Expand message"}
+            className="section-toggle-button assistant-block-toggle"
+            onClick={onToggle}
+            type="button"
+          >
+            {toggleSymbol(expanded)}
+          </button>
+        </div>
+      ) : null}
       <div className={stackScrollClassName}>{children}</div>
-      <div className="assistant-block-controls">
-        <button
-          aria-label={expanded ? "Collapse message" : "Expand message"}
-          className="section-toggle-button assistant-block-toggle"
-          onClick={onToggle}
-          type="button"
-        >
-          {toggleSymbol(expanded)}
-        </button>
-      </div>
+      {!standalone ? (
+        <div className="assistant-block-controls">
+          <button
+            aria-label={expanded ? "Collapse message" : "Expand message"}
+            className="section-toggle-button assistant-block-toggle"
+            onClick={onToggle}
+            type="button"
+          >
+            {toggleSymbol(expanded)}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1151,10 +1261,11 @@ function renderSectionCard(
   content: string,
   sectionKey: string,
   expandedSections: Record<string, boolean>,
-  onToggleSection: (sectionKey: string) => void
+  onToggleSection: (sectionKey: string) => void,
+  standalone = false
 ) {
-  const canToggle = isLongSectionContent(content);
-  const isExpanded = Boolean(expandedSections[sectionKey]);
+  const canToggle = !standalone && isLongSectionContent(content);
+  const isExpanded = standalone || Boolean(expandedSections[sectionKey]);
 
   return (
     <section className="assistant-section-card" key={sectionKey}>
@@ -1344,13 +1455,30 @@ function persistCurrentScroll(threadId: string | null, container: HTMLElement | 
   writeThreadScroll(threadId, container.scrollTop);
 }
 
-function readThreadIdFromLocation() {
-  const match = window.location.pathname.match(/^\/thread\/([0-9a-f-]+)$/i);
-  return match?.[1] ?? null;
+function readRouteFromLocation() {
+  const messageMatch = window.location.pathname.match(/^\/message\/([0-9a-f-]+)$/i);
+  if (messageMatch) {
+    return { threadId: null, messageId: messageMatch[1] };
+  }
+
+  const threadMatch = window.location.pathname.match(/^\/thread\/([0-9a-f-]+)$/i);
+  if (threadMatch) {
+    return { threadId: threadMatch[1], messageId: null };
+  }
+
+  return { threadId: null, messageId: null };
 }
 
-function setThreadUrl(threadId: string | null, push: boolean) {
-  const nextPath = threadId ? `/thread/${threadId}` : "/";
+function getThreadPath(threadId: string) {
+  return `/thread/${threadId}`;
+}
+
+function getMessagePath(messageId: string) {
+  return `/message/${messageId}`;
+}
+
+function setAppUrl(route: { threadId: string | null; messageId: string | null }, push: boolean) {
+  const nextPath = route.messageId ? getMessagePath(route.messageId) : route.threadId ? getThreadPath(route.threadId) : "/";
   const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (currentPath === nextPath) {
     return;

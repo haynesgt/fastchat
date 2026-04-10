@@ -64,6 +64,11 @@ export type ThreadDetail = {
   runs: RunRecord[];
 };
 
+export type MessageDetail = {
+  thread: ThreadSummary;
+  message: Message;
+};
+
 export type BootstrapState = {
   activeThreads: ThreadSummary[];
   archivedThreads: ThreadSummary[];
