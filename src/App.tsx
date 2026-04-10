@@ -1029,6 +1029,7 @@ function renderAssistantBody(input: {
     return (
       <MessageStackBlock
         expanded={Boolean(expandedMessages[message.id])}
+        hasSections={pending.sections.length > 0}
         onToggle={() => onToggleMessage(message.id)}
       >
         {stack}
@@ -1079,6 +1080,7 @@ function renderAssistantBody(input: {
     return (
       <MessageStackBlock
         expanded={Boolean(expandedMessages[message.id])}
+        hasSections={parsedSections.sections.length > 0}
         onToggle={() => onToggleMessage(message.id)}
       >
         {stack}
@@ -1094,6 +1096,7 @@ function renderAssistantBody(input: {
       bodyClassName="markdown-body"
       content={renderMarkdown(message.content)}
       expanded={expanded}
+      insetBody
       isHtml
       label={shouldClamp ? undefined : undefined}
       onToggle={shouldClamp ? () => onToggleMessage(message.id) : undefined}
@@ -1105,8 +1108,16 @@ function MessageStackBlock(input: {
   children: ReactNode;
   expanded: boolean;
   onToggle: () => void;
+  hasSections?: boolean;
 }) {
-  const { children, expanded, onToggle } = input;
+  const { children, expanded, onToggle, hasSections = true } = input;
+  const stackScrollClassName = [
+    "assistant-stack-scroll",
+    expanded ? "expanded" : "collapsed",
+    hasSections ? "" : "no-sections"
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="assistant-message-stack">
@@ -1120,7 +1131,7 @@ function MessageStackBlock(input: {
           {toggleSymbol(expanded)}
         </button>
       </div>
-      <div className={`assistant-stack-scroll ${expanded ? "expanded" : "collapsed"}`}>{children}</div>
+      <div className={stackScrollClassName}>{children}</div>
       <div className="assistant-block-controls">
         <button
           aria-label={expanded ? "Collapse message" : "Expand message"}
@@ -1187,9 +1198,18 @@ function ScrollableBlock(input: {
   bodyClassName: string;
   label?: string;
   onToggle?: () => void;
+  insetBody?: boolean;
 }) {
-  const { content, expanded, isHtml, bodyClassName, label, onToggle } = input;
+  const { content, expanded, isHtml, bodyClassName, label, onToggle, insetBody = false } = input;
   const canToggle = Boolean(onToggle);
+  const scrollBodyClassName = [
+    bodyClassName,
+    "assistant-scroll-body",
+    expanded ? "expanded" : canToggle ? "collapsed" : "",
+    insetBody ? "inset-body" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="assistant-block">
@@ -1207,14 +1227,9 @@ function ScrollableBlock(input: {
         </div>
       ) : null}
       {isHtml ? (
-        <div
-          className={`${bodyClassName} assistant-scroll-body ${expanded ? "expanded" : canToggle ? "collapsed" : ""}`}
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
+        <div className={scrollBodyClassName} dangerouslySetInnerHTML={{ __html: content }} />
       ) : (
-        <div className={`${bodyClassName} assistant-scroll-body ${expanded ? "expanded" : canToggle ? "collapsed" : ""}`}>
-          {content}
-        </div>
+        <div className={scrollBodyClassName}>{content}</div>
       )}
       {canToggle ? (
         <div className="assistant-block-controls">

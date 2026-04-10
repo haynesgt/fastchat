@@ -477,6 +477,11 @@ p {
   gap: 8px;
 }
 
+.assistant-scroll-body.inset-body {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
 .assistant-block-label {
   font-size: 0.78rem;
   color: var(--muted);
