@@ -863,6 +863,16 @@ p {
   border-bottom: 1px solid rgba(38, 23, 14, 0.12);
 }
 
+.markdown-body thead th:first-child,
+.assistant-section-body thead th:first-child {
+  border-top-left-radius: 20px;
+}
+
+.markdown-body thead th:last-child,
+.assistant-section-body thead th:last-child {
+  border-top-right-radius: 20px;
+}
+
 .markdown-body th + th,
 .markdown-body td + td,
 .assistant-section-body th + th,
